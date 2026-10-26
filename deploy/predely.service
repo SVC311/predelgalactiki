@@ -4,10 +4,12 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/predelgalactiki
-ExecStart=/usr/bin/node /opt/predelgalactiki/server.js
-Environment=PORT=8080
+ExecStart=/usr/bin/env node /opt/predelgalactiki/server.js
+Environment=PORT=80
+# позволяет слушать порт 80 без прав root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
-User=www-data
+User=predely
 
 [Install]
 WantedBy=multi-user.target
