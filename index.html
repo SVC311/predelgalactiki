@@ -312,7 +312,7 @@ h1{letter-spacing:.01em}
 <a class="skip" href="#nextBtn">К кнопке хода</a>
 <div class="app">
   <header>
-    <div><h1>Пределы Галактики</h1><div class="sub">Игра вдвоём на одном экране. Прототип: способностей и авиации пока нет.</div></div>
+    <div><h1>Пределы Галактики</h1><div class="sub">Вдвоём, против ИИ или по сети. Прототип: способностей и авиации пока нет.</div></div>
     <div class="row"><button class="btn" id="sndBtn" type="button" aria-pressed="true">Звук: вкл</button><button class="btn" id="undoBtn" type="button">Отменить действие</button><button class="btn" id="menuBtn" type="button">Меню</button><button class="btn" id="newBtn" type="button">Новая партия</button></div>
   </header>
   <div class="netbar" id="netbar" hidden></div>
@@ -354,8 +354,8 @@ h1{letter-spacing:.01em}
     <h2 id="titleH">Пределы<br>Галактики</h2>
     <p class="tag">Три расы спорят за кристаллы на поле из шестиугольных секторов. Стройте шахты и фабрики, ведите отряды через скалы и радиацию и разрушьте базу противника.</p>
     <div class="rc" id="titleRaces"></div>
-    <div class="acts"><button class="btn primary" type="button" id="titleGo"></button><button class="btn" type="button" id="titleNew">Новая партия</button><button class="btn" type="button" id="titleNet">Игра по сети</button></div>
-    <span class="foot">Прототип: игра вдвоём на одном экране, способностей и авиации пока нет.</span>
+    <div class="acts"><button class="btn primary" type="button" id="titleGo"></button><button class="btn" type="button" id="titleNew">Новая партия</button><button class="btn" type="button" id="titleAI">Против ИИ</button><button class="btn" type="button" id="titleNet">Игра по сети</button></div>
+    <span class="foot">Прототип: вдвоём на одном экране, против ИИ или по сети. Способностей и авиации пока нет.</span>
   </div>
 </div>
 <div class="toast" id="toast"><span id="toastMsg"></span><button type="button" id="toastUndo">Отменить</button></div>
@@ -365,8 +365,8 @@ h1{letter-spacing:.01em}
 <div class="overlay" id="setup" hidden>
   <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
     <h2 id="setupTitle">Новая партия</h2>
-    <div class="pick"><span class="lbl">Игрок 1 · сектор слева внизу</span><div class="races" id="races0"></div></div>
-    <div class="pick"><span class="lbl">Игрок 2 · сектор справа вверху</span><div class="races" id="races1"></div></div>
+    <div class="pick"><span class="lbl" id="lbl0">Игрок 1 · сектор слева внизу</span><div class="races" id="races0"></div></div>
+    <div class="pick"><span class="lbl" id="lbl1">Игрок 2 · сектор справа вверху</span><div class="races" id="races1"></div></div>
     <label class="chk"><input type="checkbox" id="heavyChk" checked> Тяжёлые бойцы (5 HP, броня 1, 300 ◆)</label>
     <label class="chk"><input type="checkbox" id="terrChk" checked> Модуль местности: скалы, вода, лес, пески, руины, радиация (случайно)</label>
     <label class="chk"><input type="checkbox" id="roadChk" checked> Случайные дороги: по дороге отряд идёт вдвое дальше</label>
@@ -549,7 +549,7 @@ function genRoads(m){ // возвращает рёбра дорог "a|b"
 /* ---------- игра по сети: комнаты на сервере (server.js) ---------- */
 const NET={on:false,code:null,seat:0,token:null,ver:0,joined:[false,false],applying:false,polling:false,setupOnline:false};
 const NETKEY="predely-net";
-const myTurn=()=>!NET.on||(S&&S.cur===NET.seat);
+const myTurn=()=>!(S&&isAI(S.cur))&&(!NET.on||(S&&S.cur===NET.seat));
 const netLink=()=>location.origin+location.pathname+"?room="+NET.code;
 async function netReq(method,url,data){const r=await fetch(url,{method,headers:data?{"Content-Type":"application/json"}:{},body:data?JSON.stringify(data):undefined,cache:"no-store"});
   const j=await r.json().catch(()=>({}));if(!r.ok&&r.status!==409)throw new Error(j.error||("Ошибка сервера "+r.status));return {status:r.status,...j}}
@@ -598,6 +598,132 @@ async function netJoin(code){
 }
 function notMine(){toast("Сейчас ходит соперник. Дождитесь его хода.","warn",false)}
 
+/* ---------- ИИ-соперник: жадные эвристики, ходит по тем же правилам и функциям, что и игрок ---------- */
+const isAI=p=>!!(S&&S.ai!=null&&S.ai===p&&!NET.on);
+let aiBusy=false;
+const aiWait=ms=>new Promise(r=>setTimeout(r,RM?Math.min(ms,120):ms));
+const kq=k=>k.split(",").map(Number);
+function aiKick(){if(aiBusy||!S||S.winner||!isAI(S.cur))return;aiBusy=true;
+  setTimeout(()=>aiTurn().catch(e=>{console.error(e);if(S&&!S.winner&&isAI(S.cur)){ui={sel:null,mode:null,cell:null};endTurn();hist=[]}}).finally(()=>{aiBusy=false;aiKick()}),900)}
+function aiDistMap(G,key){ // расстояние до цели в полушагах с учётом местности, без учёта отрядов
+  if(G.cache.has(key)) return G.cache.get(key);
+  const d=new Map([[key,0]]), q=[[...kq(key),0]];
+  while(q.length){q.sort((m,n)=>m[2]-n[2]);const [x,y,c]=q.shift(); if(c>d.get(K(x,y))) continue;
+    for(const [a,b] of adj(x,y)){const t=terr(a,b); if(t==="rock"||t==="water") continue;
+      const nc=c+stepCost(a,b,x,y)+(t==="sand"?1:0)+(t==="rad"?2:0), k=K(a,b); if(d.has(k)&&d.get(k)<=nc) continue; d.set(k,nc); q.push([a,b,nc])}}
+  G.cache.set(key,d); return d;
+}
+function aiGoals(p){
+  const foe=1-p, base=o=>S.ents.find(e=>e.owner===o&&e.type==="base");
+  const myBase=base(p), foeBase=base(foe);
+  const freeDeps=DEPOSITS.map(([q,r])=>K(q,r)).filter(k=>{const e=at(...kq(k));return !e||e.kind==="unit"});
+  const army=o=>S.ents.filter(e=>e.owner===o&&e.kind==="unit"&&e.type!=="scout").reduce((s,e)=>s+CLS[e.type].cost*(1-e.dmg/hpOf(e.type)),0);
+  const invaders=S.ents.filter(e=>e.owner===foe&&e.kind==="unit"&&dist(e,myBase)<=4);
+  const push=army(p)>=army(foe)*.8||S.round>=8;
+  const rally=K(Math.round(myBase.q*.45),Math.round(myBase.r*.45));
+  return {p,foe,myBase,foeBase,freeDeps,invaders,push,rally,claimed:new Set(),cache:new Map()};
+}
+function aiGoalFor(u,G){
+  if(u.type==="scout"){
+    const dep=G.freeDeps.filter(k=>!G.claimed.has(k)).sort((a,b)=>dist(u,{q:kq(a)[0],r:kq(a)[1]})-dist(u,{q:kq(b)[0],r:kq(b)[1]}))[0];
+    if(dep){G.claimed.add(dep);return {key:dep,dep:true}}
+  }
+  if(G.invaders.length){const t=G.invaders.slice().sort((a,b)=>dist(u,a)-dist(u,b))[0];return {key:K(t.q,t.r)}}
+  const near=S.ents.filter(e=>e.owner===G.foe&&e.kind==="unit"&&dist(e,u)<=4).sort((a,b)=>dist(u,a)-dist(u,b))[0];
+  if(near) return {key:K(near.q,near.r)};
+  return {key:G.push&&G.foeBase?K(G.foeBase.q,G.foeBase.r):G.rally};
+}
+function aiTargetScore(u,t){
+  const d=atkVal(u,t), kill=d>=maxHp(t)-t.dmg;
+  const val=t.type==="base"?40:t.kind==="unit"?CLS[t.type].cost/100+CLS[t.type].atk:t.type==="tower"?4:t.type==="factory"?3.5:t.type==="mine"?3:1;
+  return (kill?10+val*2:d*1.5+val*.5)+(t.type==="base"?4:0);
+}
+function aiBestTarget(u){let best=null;for(const id of targets(u)){const t=byId(id),s=aiTargetScore(u,t);if(!best||s>best.s)best={t,s}}return best}
+function aiPosScore(u,G,goal){
+  const k=K(u.q,u.r), dm=aiDistMap(G,goal.key);
+  let s=-(dm.has(k)?dm.get(k):60)*.5;
+  if(goal.dep&&dist(u,{q:kq(goal.key)[0],r:kq(goal.key)[1]})===1) s+=3;
+  if(isDep(u.q,u.r)) s-=3; // не вставать на месторождение: там не построить шахту
+  const t=terr(u.q,u.r); if(t==="rad") s-=4; if(t==="ruins") s+=.6; if(t==="forest") s+=.3;
+  let thr=0;
+  for(const e of S.ents){if(e.owner===u.owner) continue;
+    if(e.kind==="unit"&&dist(e,u)<=CLS[e.type].spd+CLS[e.type].rng) thr+=CLS[e.type].atk;
+    else if(e.type==="tower"&&dist(e,u)<=BLD.tower.rng) thr+=BLD.tower.atk}
+  const hp=maxHp(u)-u.dmg, worth=CLS[u.type].cost/100;
+  s-=G.push?(thr>=hp?.5*worth:thr*.08):(thr>=hp?1.5*worth:thr*.25);
+  if(u.type==="spec"&&foeNear(u)) s-=1.5;
+  return s;
+}
+async function aiUnit(u,G){
+  const goal=aiGoalFor(u,G), still=u.type==="spec"&&bal("still"), oq=u.q, or=u.r, ran=u.ran;
+  const here=!u.attacked?aiBestTarget(u):null;
+  const opts=[K(oq,or)].concat(!u.moved?[...reach(u)]:[]);
+  let A=null, Bpos=null;
+  for(const k of opts){
+    const [q,r]=kq(k), mv=k!==K(oq,or); u.q=q;u.r=r; if(mv) u.ran=dist({q:oq,r:or},{q,r});
+    const b=!u.attacked&&!(still&&mv)?aiBestTarget(u):null, pos=aiPosScore(u,G,goal);
+    const sa=(b?b.s*3:0)+pos; if(!A||sa>A.s) A={k,s:sa};
+    if(!still||!mv){ if(!Bpos||pos>Bpos.s) Bpos={k,s:pos} }
+    u.ran=ran;
+  }
+  u.q=oq;u.r=or;
+  const B=here?{s:here.s*3+Bpos.s}:null;
+  if(B&&B.s>=A.s){
+    doAttack(u,here.t); await aiWait(700); if(S.winner) return;
+    if(!u.moved&&Bpos.k!==K(oq,or)){doMove(u,...kq(Bpos.k)); await aiWait(550)}
+  } else {
+    if(A.k!==K(oq,or)){doMove(u,...kq(A.k)); await aiWait(550)}
+    if(!u.attacked){const b=aiBestTarget(u); if(b){doAttack(u,b.t); await aiWait(700)}}
+  }
+  ui.sel=null;
+}
+function aiPickUnit(p,cr,G){
+  const own=S.ents.filter(e=>e.owner===p&&e.kind==="unit"), n=t=>own.filter(e=>e.type===t).length;
+  if(cr>=CLS.scout.cost&&n("scout")<1&&G.freeDeps.length&&mines(p)<BLD.mine.limit) return "scout";
+  const opts=["giant","spec","heavy","fighter"].filter(k=>CLS[k].cost<=cr&&(k!=="heavy"||S.heavy));
+  for(const k of opts){
+    if(k==="giant"&&Math.random()<.4) continue;
+    if(k==="spec"&&n("spec")>own.length*.4) continue;
+    return k;
+  }
+  return opts[opts.length-1]||null;
+}
+async function aiBuy(p){
+  const cr=()=>S.players[p].cr, G=aiGoals(p);
+  const threats=()=>S.ents.filter(e=>e.owner!==p&&e.kind==="unit"&&dist(e,G.myBase)<=4);
+  const place=(type,score)=>{const c=[...placeCells(type)]; if(!c.length) return false;
+    c.sort((a,b)=>score(kq(b))-score(kq(a))); doBuild(type,...kq(c[0])); return true};
+  const toFoe=([q,r])=>-dist({q,r},G.foeBase);
+  for(let i=0;i<8&&!S.winner;i++){
+    let did=false;
+    if(cr()>=BLD.mine.cost&&place("mine",()=>0)) did=true;
+    else if(!count(p,"factory")&&cr()>=BLD.factory.cost&&place("factory",toFoe)) did=true;
+    else if(threats().length&&count(p,"tower")<2&&cr()>=BLD.tower.cost&&place("tower",([q,r])=>-Math.min(...threats().map(e=>dist(e,{q,r}))))) did=true;
+    else {
+      const f=S.ents.find(e=>e.owner===p&&e.type==="factory"&&!e.fresh&&!e.hired);
+      const cls=f&&aiPickUnit(p,cr(),G), cells=f?[...hireCells(f)]:[];
+      if(cls&&cells.length){cells.sort((a,b)=>-toFoe(kq(a))+toFoe(kq(b))); doHire(f,cls,...kq(cells[0])); did=true}
+      else if(count(p,"factory")<2&&S.round>=5&&cr()>=BLD.factory.cost+300&&place("factory",toFoe)) did=true;
+    }
+    if(!did) break; await aiWait(550);
+  }
+}
+async function aiTurn(){
+  const p=S.cur; ui={sel:null,mode:null,cell:null};
+  if(S.phase==="orders"){
+    for(const t of S.ents.filter(e=>e.owner===p&&e.type==="tower"&&canAct(e)&&!e.attacked)){
+      const b=aiBestTarget(t); if(b){doAttack(t,b.t); await aiWait(700); if(S.winner) return}}
+    const G=aiGoals(p);
+    const units=S.ents.filter(e=>e.owner===p&&e.kind==="unit"&&canAct(e))
+      .sort((a,b)=>(a.type==="scout")-(b.type==="scout")||(targets(b).length-targets(a).length)||dist(a,G.foeBase)-dist(b,G.foeBase));
+    for(const u of units){ if(!byId(u.id)) continue; await aiUnit(u,G); if(S.winner) return; G.cache.clear() }
+    snap(); S.phase="buy"; ui={sel:null,mode:null,cell:null}; log(`${pname(p)} переходят к покупкам.`); save(); render(); await aiWait(450);
+  }
+  if(S.phase==="buy") await aiBuy(p);
+  if(S.winner) return;
+  ui={sel:null,mode:null,cell:null}; endTurn(); hist=[];
+}
+
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
   if(NET.on&&!NET.applying&&S){netPush(FX.map(f=>({...f})))}}
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null}catch(e){return null}}
@@ -608,10 +734,10 @@ function colors(){
   st.setProperty("--p0",RACES[r0].c); st.setProperty("--p1",r0===r1?RACES[r1].alt:RACES[r1].c);
 }
 
-function newGame(r0,r1,heavy,terrain,roads,bal){
+function newGame(r0,r1,heavy,terrain,roads,bal,ai){
   S={players:[{race:r0,cr:500},{race:r1,cr:500}],cur:0,first:0,phase:"orders",round:1,heavy,terrain,nid:1,ents:[],log:[],winner:null,
      stats:{firstMine:[null,null],mines5:[null,null]}};
-  S.bal=bal||{}; S.map=terrain?genMap():{}; S.roads=roads?genRoads(S.map):[];
+  S.ai=ai??null; S.bal=bal||{}; S.map=terrain?genMap():{}; S.roads=roads?genRoads(S.map):[];
   const add=(o,kind,type,q,r)=>S.ents.push({id:S.nid++,owner:o,kind,type,q,r,dmg:0,moved:false,attacked:false,fresh:false,hired:false});
   add(0,"bld","base",-5,2); add(0,"bld","mine",-6,2); add(0,"unit","scout",-4,2); add(0,"unit","fighter",-4,1); add(0,"unit","spec",-5,3);
   add(1,"bld","base",5,-2); add(1,"bld","mine",6,-2); add(1,"unit","scout",4,-2); add(1,"unit","fighter",4,-1); add(1,"unit","spec",5,-3);
@@ -998,14 +1124,14 @@ function render(){
   if(ui.mode&&!S.winner){const nm=ui.mode.kind==="build"?BLD[ui.mode.type].n:RACES[race(p)].names[ui.mode.cls];
     mb.innerHTML=`<span>Ставим: <b>${nm}</b>. Нажмите на жёлтый гекс.</span><button type="button" id="modeCancel">Отмена</button>`;mb.hidden=false;
     $("modeCancel").onclick=()=>{ui.mode=null;render()}} else mb.hidden=true;
-  playFX();
+  playFX(); aiKick();
 }
 
 function renderPanel(s,p){
   const wp=S.winner?S.winner-1:p;
   $("banner").style.backgroundImage=`url(${art(race(wp),"base",true)})`;
   $("roundLbl").textContent=`Раунд ${S.round}`;
-  $("whoLbl").textContent=S.winner?`Победа: ${pname(wp)}`:`Ходят ${pname(p)}`+(NET.on?(p===NET.seat?" (вы)":" (соперник)"):"");
+  $("whoLbl").textContent=S.winner?`Победа: ${pname(wp)}`:`Ходят ${pname(p)}`+(NET.on?(p===NET.seat?" (вы)":" (соперник)"):S.ai!=null?(p===S.ai?" (ИИ)":" (вы)"):"");
   if(NET.on)netBar();
   $("whoLbl").style.color=`var(--p${wp})`;
   const ph=S.winner?3:S.phase==="orders"?0:1; document.querySelectorAll("#steps li").forEach((li,i)=>{li.className=i<ph?"done":i===ph?"now":""});
@@ -1084,7 +1210,7 @@ function renderInfo(s){
 function showWin(){
   sfx("win",400);
   const w=S.winner-1, st=S.stats;
-  $("winTitle").textContent=`Победа: ${pname(w)}`;
+  $("winTitle").textContent=S.ai!=null&&!NET.on?(w===S.ai?`Победа ИИ: ${pname(w)}`:`Вы победили: ${pname(w)}`):`Победа: ${pname(w)}`;
   $("winStats").innerHTML=[
     `Первый ход: ${pname(S.first)}`,
     `Сыграно раундов: ${st.rounds}`,
@@ -1105,7 +1231,9 @@ function drawPick(){
   [0,1].forEach(i=>{$("races"+i).innerHTML=Object.entries(RACES).map(([k,r])=>`<button type="button" class="race${pick[i]===k?" on":""}" data-p="${i}" data-r="${k}" style="--rc:${r.c}" aria-pressed="${pick[i]===k}"><img src="${art(k,"giant",true)}" alt=""><span>${r.n}</span><small>${r.t}</small></button>`).join("")});
   document.querySelectorAll(".race").forEach(b=>b.onclick=()=>{pick[+b.dataset.p]=b.dataset.r;drawPick()});
 }
-function openSetup(online){ NET.setupOnline=!!online; $("setupTitle").textContent=online?"Новая партия по сети":"Новая партия"; $("startBtn").textContent=online?"Создать и получить ссылку":"Начать партию"; if(S) {pick=[race(0),race(1)];BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
+let setupAI=false;
+function openSetup(online,ai){ NET.setupOnline=!!online; setupAI=!online&&!!ai; $("setupTitle").textContent=online?"Новая партия по сети":setupAI?"Новая партия против ИИ":"Новая партия";
+  $("lbl0").textContent=(setupAI?"Вы":"Игрок 1")+" · сектор слева внизу"; $("lbl1").textContent=(setupAI?"ИИ":"Игрок 2")+" · сектор справа вверху"; $("startBtn").textContent=online?"Создать и получить ссылку":"Начать партию"; if(S) {pick=[race(0),race(1)];BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
 
 $("board").addEventListener("click",ev=>{const h=ev.target.closest(".hit");if(!h)return;const [q,r]=h.dataset.k.split(",").map(Number);clickCell(q,r)});
 const ARROW={ArrowRight:[[1,0]],ArrowLeft:[[-1,0]],ArrowUp:[[0,-1],[1,-1]],ArrowDown:[[0,1],[-1,1]]};
@@ -1115,11 +1243,12 @@ $("board").addEventListener("keydown",ev=>{
     const nk=ARROW[ev.key].map(([a,b])=>K(q+a,r+b)).find(x=>CELLS.has(x)); if(!nk)return;
     const n=$("board").querySelector(`.hit[data-k="${nk}"]`); if(n){h.setAttribute("tabindex","-1");n.setAttribute("tabindex","0");focusK=nk;n.focus()} return}
   if(ev.key!=="Enter"&&ev.key!==" ")return;const h=ev.target.closest(".hit");if(!h)return;ev.preventDefault();const k=h.dataset.k;const [q,r]=k.split(",").map(Number);clickCell(q,r);const n=$("board").querySelector(`.hit[data-k="${k}"]`);if(n)n.focus()});
-$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])));if(online)netCreate()};
+$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])),setupAI?1:null);if(online)netCreate()};
 $("cancelSetup").onclick=()=>closeDlg("setup");
 $("zoomBtn").onclick=()=>{const w=$("boardwrap"), on=!w.classList.contains("zoom"); w.classList.toggle("zoom",on); $("zoomBtn").setAttribute("aria-pressed",on); $("zoomBtn").textContent=on?"Уменьшить поле":"Увеличить поле";
   if(on){const b=S&&S.ents.find(e=>e.owner===S.cur&&e.type==="base"); requestAnimationFrame(()=>{const fr=b?(px(b.q,b.r)[0]-VB[0])/VB[2]:.5; w.scrollLeft=w.scrollWidth*fr-w.clientWidth/2})}};
-$("newBtn").onclick=()=>openSetup(false); $("winNew").onclick=()=>{$("winDlg").hidden=true;openSetup(NET.on)}; $("winClose").onclick=()=>closeDlg("winDlg");
+const aiGame=()=>!!(S&&S.ai!=null&&!NET.on);
+$("newBtn").onclick=()=>openSetup(false,aiGame()); $("winNew").onclick=()=>{$("winDlg").hidden=true;openSetup(NET.on,aiGame())}; $("winClose").onclick=()=>closeDlg("winDlg");
 function undo(){if(!hist.length||!myTurn())return;FX=[];const was=S.log[0];S=JSON.parse(hist.pop());ui={sel:null,mode:null,cell:null};colors();save();render();toast("Отменено: "+was,"ok",false)}
 $("undoBtn").onclick=undo; $("toastUndo").onclick=undo;
 document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"&&!e.shiftKey){e.preventDefault();undo()}});
@@ -1141,7 +1270,8 @@ function showTitle(){
   const cont=S&&!S.winner; $("titleGo").textContent=cont?`Продолжить: раунд ${S.round}`:"Начать партию"; $("titleNew").hidden=!cont;
   openDlg("title","titleGo")}
 $("titleGo").onclick=()=>{const cont=S&&!S.winner;$("title").hidden=true;if(cont){render()}else openSetup(false)};
-$("titleNew").onclick=()=>{$("title").hidden=true;openSetup(false)};
+$("titleNew").onclick=()=>{$("title").hidden=true;openSetup(false,aiGame())};
+$("titleAI").onclick=()=>{$("title").hidden=true;openSetup(false,true)};
 $("titleNet").onclick=()=>{$("title").hidden=true;openSetup(true)};
 $("netCopy").onclick=()=>{const t=netLink();(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast("Ссылка скопирована","ok",false),()=>toast("Выделите ссылку и скопируйте вручную","warn",false))};
 $("netClose").onclick=()=>closeDlg("netDlg");
