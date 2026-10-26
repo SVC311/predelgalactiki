@@ -1,0 +1,13 @@
+[Unit]
+Description=Пределы Галактики — сервер онлайн-партий
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/predelgalactiki
+ExecStart=/usr/bin/node /opt/predelgalactiki/server.js
+Environment=PORT=8080
+Restart=always
+User=www-data
+
+[Install]
+WantedBy=multi-user.target

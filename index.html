@@ -192,6 +192,11 @@ button.btn.primary{background:linear-gradient(90deg,var(--cur),color-mix(in srgb
 .race.on{border-color:var(--rc)}
 .race.on img{opacity:1}
 .dlg .chk{display:flex;align-items:center;gap:8px;font-size:14px}
+.netbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:rgba(23,30,54,.9);border:1px solid var(--line);border-left:3px solid var(--cur);border-radius:var(--r-lg);padding:8px 12px;font-size:13px}
+.netbar b{font-family:var(--mono)}
+.netbar .dot{width:8px;height:8px;border-radius:50%;background:#ffb23f;display:inline-block;margin-right:6px}
+.netbar .dot.ok{background:var(--move)}
+.netlink{font-family:var(--mono);font-size:13px;background:#0a0e1c;border:1px solid var(--line);border-radius:var(--r-md);padding:10px;word-break:break-all;user-select:all}
 .balset{border:1px solid var(--line);border-radius:var(--r-lg);padding:8px 12px 12px;margin:0;display:flex;flex-direction:column;gap:8px}
 .balset legend{font-size:12px;color:var(--muted);padding:0 4px}
 .balset .chk{font-size:13px;align-items:flex-start}
@@ -310,6 +315,7 @@ h1{letter-spacing:.01em}
     <div><h1>Пределы Галактики</h1><div class="sub">Игра вдвоём на одном экране. Прототип: способностей и авиации пока нет.</div></div>
     <div class="row"><button class="btn" id="sndBtn" type="button" aria-pressed="true">Звук: вкл</button><button class="btn" id="undoBtn" type="button">Отменить действие</button><button class="btn" id="menuBtn" type="button">Меню</button><button class="btn" id="newBtn" type="button">Новая партия</button></div>
   </header>
+  <div class="netbar" id="netbar" hidden></div>
   <main class="main">
     <div><div class="boardtools"><button class="btn zoomBtn" id="zoomBtn" type="button" aria-pressed="false">Увеличить поле</button></div><div class="boardwrap" id="boardwrap"><div class="modebar" id="modebar" hidden></div><div class="board" id="board" role="group" aria-label="Игровое поле" aria-describedby="boardHelp"></div><p class="sr" id="boardHelp">Стрелки влево и вправо — соседний гекс в ряду, вверх и вниз — соседний ряд. Enter или пробел — выбрать или походить. Escape — снять выбор.</p></div></div>
     <div class="side">
@@ -348,7 +354,7 @@ h1{letter-spacing:.01em}
     <h2 id="titleH">Пределы<br>Галактики</h2>
     <p class="tag">Три расы спорят за кристаллы на поле из шестиугольных секторов. Стройте шахты и фабрики, ведите отряды через скалы и радиацию и разрушьте базу противника.</p>
     <div class="rc" id="titleRaces"></div>
-    <div class="acts"><button class="btn primary" type="button" id="titleGo"></button><button class="btn" type="button" id="titleNew">Новая партия</button></div>
+    <div class="acts"><button class="btn primary" type="button" id="titleGo"></button><button class="btn" type="button" id="titleNew">Новая партия</button><button class="btn" type="button" id="titleNet">Игра по сети</button></div>
     <span class="foot">Прототип: игра вдвоём на одном экране, способностей и авиации пока нет.</span>
   </div>
 </div>
@@ -373,6 +379,15 @@ h1{letter-spacing:.01em}
     </fieldset>
     <p class="hint" style="margin:0">Первого игрока выберет жребий. В базовой игре расы различаются только обликом и названиями.</p>
     <div class="row"><button class="btn primary" id="startBtn" type="button" style="width:auto">Начать партию</button><button class="btn" id="cancelSetup" type="button">Отмена</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="netDlg" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="netTitle">
+    <h2 id="netTitle">Партия по сети</h2>
+    <p class="hint" style="margin:0" id="netText"></p>
+    <div class="netlink" id="netLink"></div>
+    <div class="row"><button class="btn primary" id="netCopy" type="button" style="width:auto">Скопировать ссылку</button><button class="btn" id="netClose" type="button">К полю</button></div>
   </div>
 </div>
 
@@ -531,7 +546,60 @@ function genRoads(m){ // возвращает рёбра дорог "a|b"
   return [...ed];
 }
 
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+/* ---------- игра по сети: комнаты на сервере (server.js) ---------- */
+const NET={on:false,code:null,seat:0,token:null,ver:0,joined:[false,false],applying:false,polling:false,setupOnline:false};
+const NETKEY="predely-net";
+const myTurn=()=>!NET.on||(S&&S.cur===NET.seat);
+const netLink=()=>location.origin+location.pathname+"?room="+NET.code;
+async function netReq(method,url,data){const r=await fetch(url,{method,headers:data?{"Content-Type":"application/json"}:{},body:data?JSON.stringify(data):undefined,cache:"no-store"});
+  const j=await r.json().catch(()=>({}));if(!r.ok&&r.status!==409)throw new Error(j.error||("Ошибка сервера "+r.status));return {status:r.status,...j}}
+function netStore(){try{NET.on?localStorage.setItem(NETKEY,JSON.stringify({code:NET.code,token:NET.token,seat:NET.seat})):localStorage.removeItem(NETKEY)}catch(e){}}
+function netAdopt(j){ // применить состояние с сервера
+  NET.joined=j.joined||NET.joined; if(j.ver<=NET.ver&&!(j.ver===NET.ver&&!S)){netBar();return}
+  NET.ver=j.ver; if(!j.state){netBar();return}
+  const fresh=JSON.stringify(j.state)!==JSON.stringify(S);
+  if(fresh){NET.applying=true;S=j.state;hist=[];ui={sel:null,mode:null,cell:null};FX=(j.fx||[]).filter(f=>f.t!=="nope");colors();save();render();NET.applying=false;
+    if(S.winner&&$("winDlg").hidden)showWin()}
+  netBar();
+}
+let netQ=null, netSending=false;
+async function netPush(fx){ // ходы уходят по очереди, каждый со свежим номером версии
+  netQ={state:JSON.parse(JSON.stringify(S)),fx:(netQ?netQ.fx:[]).concat(fx).slice(-40)}; if(netSending) return; netSending=true;
+  while(netQ){const q=netQ; netQ=null;
+    try{const j=await netReq("POST",`api/room/${NET.code}/state`,{token:NET.token,ver:NET.ver,state:q.state,fx:q.fx});
+      if(j.status===409){toast("Соперник успел походить, загружаю его ход","warn",false);netQ=null;NET.ver=0;netAdopt(j)} else {NET.ver=j.ver;NET.joined=j.joined||NET.joined;netBar()}}
+    catch(e){toast("Нет связи с сервером: ход не отправлен. Обновите страницу.","warn",false);netQ=null}}
+  netSending=false;
+}
+async function netPoll(){if(NET.polling)return;NET.polling=true;
+  while(NET.on){try{const j=await netReq("GET",`api/room/${NET.code}?since=${NET.ver}`);netAdopt(j)}catch(e){await new Promise(r=>setTimeout(r,3000))}}
+  NET.polling=false}
+function netBar(){const b=$("netbar");if(!NET.on){b.hidden=true;return}b.hidden=false;
+  const other=NET.joined[1-NET.seat], mine=S&&!S.winner&&S.cur===NET.seat;
+  b.innerHTML=`<span><span class="dot${other?" ok":""}"></span>Партия по сети <b>${NET.code}</b>, вы — ${S?pname(NET.seat):"игрок "+(NET.seat+1)}</span><span>${!other?"Ждём второго игрока":S&&S.winner?"Партия окончена":mine?"<b style='color:var(--move)'>Ваш ход</b>":"Ходит соперник…"}</span><button class="btn" type="button" id="netShow">Ссылка для соперника</button><button class="btn" type="button" id="netLeave">Выйти из сетевой партии</button>`;
+  $("netShow").onclick=netShowLink; $("netLeave").onclick=()=>{NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar();$("nextBtn").disabled=false;showTitle()};
+  $("undoBtn").disabled=!hist.length||!myTurn(); $("nextBtn").disabled=!myTurn();
+}
+function netShowLink(){$("netText").textContent=`Код партии ${NET.code}. Отправьте эту ссылку второму игроку: он откроет её у себя и сразу попадёт в партию. Вы играете за ${pname(NET.seat)}.`;
+  $("netLink").textContent=netLink(); openDlg("netDlg","netCopy")}
+async function netCreate(){
+  try{const j=await netReq("POST","api/room",{state:S});Object.assign(NET,{on:true,code:j.code,seat:j.seat,token:j.token,ver:j.ver,joined:j.joined});netStore();
+    history.replaceState(null,"","?room="+j.code);render();netShowLink();netPoll()}
+  catch(e){toast("Не удалось создать сетевую партию: сервер недоступен. Партия идёт на одном экране.","warn",false)}
+}
+async function netJoin(code){
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(NETKEY)||"null")}catch(e){}
+  const token=saved&&saved.code===code?saved.token:null;
+  try{const j=await netReq("POST",`api/room/${code}/join`,{token});
+    if(j.status===409) throw new Error(j.error+". Попросите создателя партии прислать новую ссылку.");
+    Object.assign(NET,{on:true,code:j.code,seat:j.seat,token:j.token,ver:0,joined:j.joined});netStore();
+    $("title").hidden=true;netAdopt(j);if(S)render();if(!token)toast(`Вы в партии ${j.code}: играете за ${S?pname(NET.seat):"игрока "+(NET.seat+1)}.`,"ok",false);netPoll()}
+  catch(e){toast(e.message||"Не удалось войти в партию","warn",false);history.replaceState(null,"",location.pathname)}
+}
+function notMine(){toast("Сейчас ходит соперник. Дождитесь его хода.","warn",false)}
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+  if(NET.on&&!NET.applying&&S){netPush(FX.map(f=>({...f})))}}
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null}catch(e){return null}}
 function snap(){hist.push(JSON.stringify(S));if(hist.length>60)hist.shift()}
 function log(t){S.log.unshift(t);if(S.log.length>80)S.log.pop()}
@@ -603,7 +671,7 @@ function atkStats(e){return e.kind==="unit"?{atk:CLS[e.type].atk,rng:CLS[e.type]
 function targets(u){const {rng}=atkStats(u);return S.ents.filter(e=>e.owner!==u.owner&&dist(e,u)<=rng&&los(u,e)).map(e=>e.id)}
 function leftActs(e){if(e.owner!==S.cur||e.fresh||S.phase!=="orders"||S.winner)return null;if(e.kind==="unit")return {mv:!e.moved,at:!e.attacked};if(e.type==="tower")return {mv:null,at:!e.attacked};return null}
 function pending(){return S.ents.filter(e=>{const l=leftActs(e);return l&&(l.mv||l.at)})}
-function doPass(u){snap();const left=u.kind==="unit"&&!u.moved&&!u.attacked?"пропускает приказы":"заканчивает приказы";u.moved=true;u.attacked=true;log(`${ename(u)} (${cn(u.q,u.r)}) ${left}.`);ui.sel=null;save();render();toast(S.log[0],"ok",true)}
+function doPass(u){if(!myTurn())return notMine();snap();const left=u.kind==="unit"&&!u.moved&&!u.attacked?"пропускает приказы":"заканчивает приказы";u.moved=true;u.attacked=true;log(`${ename(u)} (${cn(u.q,u.r)}) ${left}.`);ui.sel=null;save();render();toast(S.log[0],"ok",true)}
 function canAct(e){return e.owner===S.cur&&!e.fresh&&!S.winner&&S.phase==="orders"&&(e.kind==="unit"||e.type==="tower")}
 
 function controlled(p,q,r){
@@ -656,6 +724,7 @@ function doHire(f,cls,q,r){
 
 function clickCell(q,r){
   if(!S||S.winner) return;
+  if(!myTurn()){const e=at(q,r);ui.sel=e?e.id:null;ui.cell=e?null:[q,r];ui.mode=null;render();return}
   const k=K(q,r), e=at(q,r);
   if(ui.mode){
     const cells=ui.mode.kind==="build"?placeCells(ui.mode.type):hireCells(byId(ui.mode.fid));
@@ -936,7 +1005,8 @@ function renderPanel(s,p){
   const wp=S.winner?S.winner-1:p;
   $("banner").style.backgroundImage=`url(${art(race(wp),"base",true)})`;
   $("roundLbl").textContent=`Раунд ${S.round}`;
-  $("whoLbl").textContent=S.winner?`Победа: ${pname(wp)}`:`Ходят ${pname(p)}`;
+  $("whoLbl").textContent=S.winner?`Победа: ${pname(wp)}`:`Ходят ${pname(p)}`+(NET.on?(p===NET.seat?" (вы)":" (соперник)"):"");
+  if(NET.on)netBar();
   $("whoLbl").style.color=`var(--p${wp})`;
   const ph=S.winner?3:S.phase==="orders"?0:1; document.querySelectorAll("#steps li").forEach((li,i)=>{li.className=i<ph?"done":i===ph?"now":""});
   $("players").innerHTML=[0,1].map(i=>{const base=S.ents.find(e=>e.owner===i&&e.type==="base");
@@ -953,7 +1023,7 @@ function renderPanel(s,p){
 function tile(img,name,cost,lim,dis,on,fn,tip){
   const b=document.createElement("button"); b.type="button"; b.className="tile"+(on?" on":""); b.disabled=dis;
   b.innerHTML=`<img src="${img}" alt=""><span class="tn">${name}</span><span class="tc">${cost} ◆</span>${lim?`<span class="tl">${lim}</span>`:""}`;
-  if(tip) b.dataset.tip=tip; b.onclick=fn; return b;
+  if(tip) b.dataset.tip=tip; b.onclick=()=>myTurn()?fn():notMine(); return b;
 }
 
 function renderInfo(s){
@@ -1035,7 +1105,7 @@ function drawPick(){
   [0,1].forEach(i=>{$("races"+i).innerHTML=Object.entries(RACES).map(([k,r])=>`<button type="button" class="race${pick[i]===k?" on":""}" data-p="${i}" data-r="${k}" style="--rc:${r.c}" aria-pressed="${pick[i]===k}"><img src="${art(k,"giant",true)}" alt=""><span>${r.n}</span><small>${r.t}</small></button>`).join("")});
   document.querySelectorAll(".race").forEach(b=>b.onclick=()=>{pick[+b.dataset.p]=b.dataset.r;drawPick()});
 }
-function openSetup(){ if(S) {pick=[race(0),race(1)];BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
+function openSetup(online){ NET.setupOnline=!!online; $("setupTitle").textContent=online?"Новая партия по сети":"Новая партия"; $("startBtn").textContent=online?"Создать и получить ссылку":"Начать партию"; if(S) {pick=[race(0),race(1)];BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
 
 $("board").addEventListener("click",ev=>{const h=ev.target.closest(".hit");if(!h)return;const [q,r]=h.dataset.k.split(",").map(Number);clickCell(q,r)});
 const ARROW={ArrowRight:[[1,0]],ArrowLeft:[[-1,0]],ArrowUp:[[0,-1],[1,-1]],ArrowDown:[[0,1],[-1,1]]};
@@ -1045,24 +1115,24 @@ $("board").addEventListener("keydown",ev=>{
     const nk=ARROW[ev.key].map(([a,b])=>K(q+a,r+b)).find(x=>CELLS.has(x)); if(!nk)return;
     const n=$("board").querySelector(`.hit[data-k="${nk}"]`); if(n){h.setAttribute("tabindex","-1");n.setAttribute("tabindex","0");focusK=nk;n.focus()} return}
   if(ev.key!=="Enter"&&ev.key!==" ")return;const h=ev.target.closest(".hit");if(!h)return;ev.preventDefault();const k=h.dataset.k;const [q,r]=k.split(",").map(Number);clickCell(q,r);const n=$("board").querySelector(`.hit[data-k="${k}"]`);if(n)n.focus()});
-$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])))};
+$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])));if(online)netCreate()};
 $("cancelSetup").onclick=()=>closeDlg("setup");
 $("zoomBtn").onclick=()=>{const w=$("boardwrap"), on=!w.classList.contains("zoom"); w.classList.toggle("zoom",on); $("zoomBtn").setAttribute("aria-pressed",on); $("zoomBtn").textContent=on?"Уменьшить поле":"Увеличить поле";
   if(on){const b=S&&S.ents.find(e=>e.owner===S.cur&&e.type==="base"); requestAnimationFrame(()=>{const fr=b?(px(b.q,b.r)[0]-VB[0])/VB[2]:.5; w.scrollLeft=w.scrollWidth*fr-w.clientWidth/2})}};
-$("newBtn").onclick=openSetup; $("winNew").onclick=()=>{$("winDlg").hidden=true;openSetup()}; $("winClose").onclick=()=>closeDlg("winDlg");
-function undo(){if(!hist.length)return;FX=[];const was=S.log[0];S=JSON.parse(hist.pop());ui={sel:null,mode:null,cell:null};colors();save();render();toast("Отменено: "+was,"ok",false)}
+$("newBtn").onclick=()=>openSetup(false); $("winNew").onclick=()=>{$("winDlg").hidden=true;openSetup(NET.on)}; $("winClose").onclick=()=>closeDlg("winDlg");
+function undo(){if(!hist.length||!myTurn())return;FX=[];const was=S.log[0];S=JSON.parse(hist.pop());ui={sel:null,mode:null,cell:null};colors();save();render();toast("Отменено: "+was,"ok",false)}
 $("undoBtn").onclick=undo; $("toastUndo").onclick=undo;
 document.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"&&!e.shiftKey){e.preventDefault();undo()}});
-$("nextBtn").onclick=()=>{if(!S||S.winner)return;if(S.phase==="orders"){snap();S.phase="buy";ui={sel:null,mode:null,cell:null};log(`${pname(S.cur)} переходят к покупкам.`);save();render()}else endTurn()};
+$("nextBtn").onclick=()=>{if(!S||S.winner)return;if(!myTurn())return notMine();if(S.phase==="orders"){snap();S.phase="buy";ui={sel:null,mode:null,cell:null};log(`${pname(S.cur)} переходят к покупкам.`);save();render()}else endTurn()};
 let lastFocus=null;
 function openDlg(id,first){lastFocus=document.activeElement;$(id).hidden=false;requestAnimationFrame(()=>{const f=first?$(first):$(id).querySelector("button");if(f)f.focus()})}
 function closeDlg(id){$(id).hidden=true;if(lastFocus&&document.contains(lastFocus))lastFocus.focus()}
 document.addEventListener("keydown",e=>{
-  const dlg=!$("setup").hidden?$("setup"):!$("winDlg").hidden?$("winDlg"):!$("title").hidden?$("title"):null;
+  const dlg=!$("netDlg").hidden?$("netDlg"):!$("setup").hidden?$("setup"):!$("winDlg").hidden?$("winDlg"):!$("title").hidden?$("title"):null;
   if(dlg&&e.key==="Tab"){const f=[...dlg.querySelectorAll("button,input")].filter(x=>x.offsetParent&&!x.disabled);if(!f.length)return;
     const a=f[0],z=f[f.length-1]; if(e.shiftKey&&document.activeElement===a){e.preventDefault();z.focus()} else if(!e.shiftKey&&document.activeElement===z){e.preventDefault();a.focus()} return}
   if(e.key==="Escape"){hideTip();
-    if(dlg){if(dlg.id==="setup"&&S)closeDlg("setup");else if(dlg.id==="winDlg")closeDlg("winDlg");else if(dlg.id==="title"&&S&&!S.winner)closeDlg("title");return}
+    if(dlg){if(dlg.id==="netDlg")closeDlg("netDlg");else if(dlg.id==="setup"&&S)closeDlg("setup");else if(dlg.id==="winDlg")closeDlg("winDlg");else if(dlg.id==="title"&&S&&!S.winner)closeDlg("title");return}
     ui={sel:null,mode:null,cell:null};render()}});
 
 document.documentElement.lang="ru";
@@ -1070,13 +1140,18 @@ function showTitle(){
   $("titleRaces").innerHTML=Object.entries(RACES).map(([k,r])=>`<div style="--rc:${r.c}"><img src="${art(k,"giant",true)}" alt=""><b>${r.n}</b><span>${r.t}</span></div>`).join("");
   const cont=S&&!S.winner; $("titleGo").textContent=cont?`Продолжить: раунд ${S.round}`:"Начать партию"; $("titleNew").hidden=!cont;
   openDlg("title","titleGo")}
-$("titleGo").onclick=()=>{const cont=S&&!S.winner;$("title").hidden=true;if(cont){render()}else openSetup()};
-$("titleNew").onclick=()=>{$("title").hidden=true;openSetup()};
+$("titleGo").onclick=()=>{const cont=S&&!S.winner;$("title").hidden=true;if(cont){render()}else openSetup(false)};
+$("titleNew").onclick=()=>{$("title").hidden=true;openSetup(false)};
+$("titleNet").onclick=()=>{$("title").hidden=true;openSetup(true)};
+$("netCopy").onclick=()=>{const t=netLink();(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast("Ссылка скопирована","ok",false),()=>toast("Выделите ссылку и скопируйте вручную","warn",false))};
+$("netClose").onclick=()=>closeDlg("netDlg");
 $("menuBtn").onclick=showTitle;
 S=load();
 if(S&&S.terrain&&!S.map){S.map=legacyMap();S.roads=[]}
 if(S&&S.ents&&S.players){colors();render();}
-showTitle();
+const ROOM=new URLSearchParams(location.search).get("room");
+$("titleNet").hidden=true; if(location.protocol!=="file:") fetch("api/room/_",{cache:"no-store"}).then(r=>r.json()).then(j=>{if(j&&j.error)$("titleNet").hidden=false}).catch(()=>{});
+if(ROOM) netJoin(ROOM.toUpperCase()); else showTitle();
 $("sndBtn").onclick=()=>{sndOn=!sndOn;try{localStorage.setItem("predely-snd",sndOn?"on":"off")}catch(e){}sndUI();sfx("click")};sndUI();
 document.addEventListener("click",e=>{const b=e.target.closest("button");if(b&&b.id!=="sndBtn"&&b.id!=="nextBtn")sfx("click")},true);
 })();
