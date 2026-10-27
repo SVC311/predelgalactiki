@@ -354,7 +354,7 @@ button.btn.primary:hover:not(:disabled){filter:brightness(1.1);transform:transla
 <a class="skip" href="#nextBtn">К кнопке хода</a>
 <div class="app">
   <header>
-    <div><h1>Пределы Галактики</h1><div class="sub">Вдвоём, против ИИ или по сети. Прототип: способностей и авиации пока нет.</div></div>
+    <div><h1>Пределы Галактики</h1><div class="sub">Вдвоём, против ИИ или по сети. Прототип: авиации пока нет.</div></div>
     <div class="row"><button class="btn" id="sndBtn" type="button" aria-pressed="true">Звук: вкл</button><button class="btn" id="undoBtn" type="button">Отменить действие</button><button class="btn" id="menuBtn" type="button">Меню</button><button class="btn" id="newBtn" type="button">Новая партия</button></div>
   </header>
   <div class="netbar" id="netbar" hidden></div>
@@ -397,7 +397,7 @@ button.btn.primary:hover:not(:disabled){filter:brightness(1.1);transform:transla
     <p class="tag">Три расы спорят за кристаллы на поле из шестиугольных секторов. Стройте шахты и фабрики, ведите отряды через скалы и радиацию и разрушьте базу противника.</p>
     <div class="rc" id="titleRaces"></div>
     <div class="acts"><button class="btn primary" type="button" id="titleGo"></button><button class="btn" type="button" id="titleNew">Новая партия</button><button class="btn" type="button" id="titleAI">Против ИИ</button><button class="btn" type="button" id="titleNet">Игра по сети</button></div>
-    <span class="foot">Прототип: вдвоём на одном экране, против ИИ или по сети. Способностей и авиации пока нет.</span>
+    <span class="foot">Прототип: вдвоём на одном экране, против ИИ или по сети. Авиации пока нет.</span>
   </div>
 </div>
 <div class="toast" id="toast"><span id="toastMsg"></span><button type="button" id="toastUndo">Отменить</button></div>
@@ -411,6 +411,7 @@ button.btn.primary:hover:not(:disabled){filter:brightness(1.1);transform:transla
     <div class="pick"><span class="lbl" id="lbl1">Игрок 2 · сектор справа вверху</span><div class="races" id="races1"></div></div>
     <label class="chk"><input type="checkbox" id="heavyChk" checked> Тяжёлые бойцы (5 HP, броня 1, 300 ◆)</label>
     <label class="chk"><input type="checkbox" id="terrChk" checked> Модуль местности: скалы, вода, лес, пески, руины, радиация (случайно)</label>
+    <label class="chk"><input type="checkbox" id="abilChk" checked> Способности рас: у каждого отряда своё свойство из карточек энциклопедии</label>
     <label class="chk"><input type="checkbox" id="roadChk" checked> Случайные дороги: по дороге отряд идёт вдвое дальше</label>
     <fieldset class="balset"><legend>Баланс для плейтеста</legend>
     <label class="chk"><input type="checkbox" id="b_still"> 1. «Стоял или стрелял»: специалист за ход либо двигается, либо стреляет</label>
@@ -457,6 +458,24 @@ const CLS={
   heavy:{n:"Тяжёлый боец",cost:300,hp:5,atk:2,rng:1,spd:1,arm:1},
   spec:{n:"Специалист",cost:350,hp:3,atk:2,rng:2,spd:2,arm:0},
   giant:{n:"Гигант",cost:600,hp:8,atk:3,rng:1,spd:1,arm:0}
+};
+/* Способности рас: по одной на класс, по «особым свойствам» карточек энциклопедии v3 */
+const ABIL={
+  dorg:{scout:{n:"Рывок",d:"Первая атака Берсерка за партию наносит +1 урон."},
+        fighter:{n:"Мощный удар",d:"Атака Молота игнорирует 1 броню цели."},
+        heavy:{n:"Броня",d:"Страж получает на 1 урон меньше: его броня 2 вместо 1."},
+        spec:{n:"Залп",d:"Град наносит строениям +1 урон."},
+        giant:{n:"Сейсмический удар",d:"Атака Горного титана наносит ещё 1 урон двум врагам рядом с целью, включая строения."}},
+  xar:{scout:{n:"Засада",d:"Если Теневой охотник в этот ход не двигался, его атака наносит +1 урон."},
+       fighter:{n:"Обход",d:"Призрак проходит сквозь вражеские отряды, но не останавливается на их гексах."},
+       heavy:{n:"Пробитие",d:"Атака Тарана игнорирует всю броню цели, включая бонус руин и леса."},
+       spec:{n:"Выстрел",d:"Обычная дальняя атака на 2 гекса, без особых правил."},
+       giant:{n:"Регенерация",d:"Уничтожив вражеский отряд, Элизион восстанавливает 2 HP."}},
+  vel:{scout:{n:"Манёвр",d:"Астра проходит на 1 гекс больше: скорость 4."},
+       fighter:{n:"Контроль пространства",d:"Если Серафим в свой прошлый ход не двигался, у него броня +1."},
+       heavy:{n:"Щит",d:"Гардиан получает на 1 урон меньше от стрелков и башен."},
+       spec:{n:"Наводка",d:"Цель, по которой выстрелил Провидец, до конца хода получает +1 урон от других атак Веларов."},
+       giant:{n:"Энергетический удар",d:"Атака Эфириона наносит ещё 1 урон всем вражеским отрядам рядом с целью."}}
 };
 const BLD={
   base:{n:"Главная база",hp:12},
@@ -520,13 +539,23 @@ const at=(q,r)=>S.ents.find(e=>e.q===q&&e.r===r);
 const byId=id=>S.ents.find(e=>e.id===id);
 const BALK=["still","close","hp2","charge","block"];
 const bal=k=>!!(S&&S.bal&&S.bal[k]);
+const abOn=()=>!!(S&&S.abil);
+const has=(u,r,c)=>abOn()&&u&&u.kind==="unit"&&u.type===c&&race(u.owner)===r;
+const spdR=(r,c)=>CLS[c].spd+(abOn()&&r==="vel"&&c==="scout"?1:0);
+const spdOf=u=>spdR(race(u.owner),u.type);
 const hpOf=t=>t==="spec"&&bal("hp2")?2:CLS[t].hp;
 const maxHp=e=>e.kind==="unit"?hpOf(e.type):BLD[e.type].hp;
 const foeNear=u=>adj(u.q,u.r).some(([a,b])=>{const o=at(a,b);return o&&o.kind==="unit"&&o.owner!==u.owner});
-function atkVal(u,t){let a=atkStats(u).atk;
+function atkVal(u,t){let a=atkStats(u).atk, arm=armor(t,u);
+  if(has(u,"dorg","scout")&&!u.firstHit) a++;
+  if(has(u,"dorg","spec")&&t.kind==="bld") a++;
+  if(has(u,"xar","scout")&&!u.moved) a++;
+  if(t.mark&&u.kind==="unit"&&race(u.owner)==="vel"&&abOn()) a++;
+  if(has(u,"dorg","fighter")) arm=Math.max(0,arm-1);
+  if(has(u,"xar","heavy")) arm=0;
   if(u.kind==="unit"&&u.type==="spec"&&bal("close")&&foeNear(u)) a--;
   if(u.kind==="unit"&&CLS[u.type].rng===1&&bal("charge")&&(u.ran||0)>=2) a++;
-  return Math.max(1,a-armor(t,u))}
+  return Math.max(1,a-arm)}
 const race=p=>S.players[p].race;
 const pname=p=>`${RACES[race(p)].n}${race(0)===race(1)?" "+(p+1):""}`;
 const ename=e=>e.kind==="unit"?RACES[race(e.owner)].names[e.type]:BLD[e.type].n;
@@ -535,7 +564,8 @@ const mines=p=>count(p,"mine");
 const terr=(q,r)=>S&&S.terrain&&S.map?S.map[K(q,r)]||null:null;
 const roadE=(a,b)=>!!(S&&S.roads&&S.roads.includes(a<b?a+"|"+b:b+"|"+a));
 const isRoad=(q,r)=>!!(S&&S.roads&&S.roads.some(e=>e.split("|").includes(K(q,r))));
-const armor=(e,src)=>e.kind==="unit"?CLS[e.type].arm+(terr(e.q,e.r)==="ruins"?1:0)+(src&&terr(e.q,e.r)==="forest"&&atkStats(src).rng>=2?1:0):0;
+const armor=(e,src)=>e.kind==="unit"?CLS[e.type].arm+(terr(e.q,e.r)==="ruins"?1:0)+(src&&terr(e.q,e.r)==="forest"&&atkStats(src).rng>=2?1:0)
+  +(has(e,"dorg","heavy")?1:0)+(has(e,"vel","fighter")&&!e.ran?1:0)+(src&&has(e,"vel","heavy")&&atkStats(src).rng>=2?1:0):0;
 const zoneOf=(q,r)=>{const s=SECTORS[cell(q,r).s];return s.p===undefined?-1:s.p};
 const px=(q,r)=>[HS*SQ3*(q+r/2),HS*1.5*r];
 const corner=(x,y,i,rad=HS)=>{const a=Math.PI/180*(60*i-30);return [x+rad*Math.cos(a),y+rad*Math.sin(a)]};
@@ -689,7 +719,7 @@ function aiPosScore(u,G,goal){
   const t=terr(u.q,u.r); if(t==="rad") s-=4; if(t==="ruins") s+=.6; if(t==="forest") s+=.3;
   let thr=0;
   for(const e of S.ents){if(e.owner===u.owner) continue;
-    if(e.kind==="unit"&&dist(e,u)<=CLS[e.type].spd+CLS[e.type].rng) thr+=CLS[e.type].atk;
+    if(e.kind==="unit"&&dist(e,u)<=spdOf(e)+CLS[e.type].rng) thr+=CLS[e.type].atk;
     else if(e.type==="tower"&&dist(e,u)<=BLD.tower.rng) thr+=BLD.tower.atk}
   const hp=maxHp(u)-u.dmg, worth=CLS[u.type].cost/100;
   s-=G.push?(thr>=hp?.5*worth:thr*.08):(thr>=hp?1.5*worth:thr*.25);
@@ -702,11 +732,11 @@ async function aiUnit(u,G){
   const opts=[K(oq,or)].concat(!u.moved?[...reach(u)]:[]);
   let A=null, Bpos=null;
   for(const k of opts){
-    const [q,r]=kq(k), mv=k!==K(oq,or); u.q=q;u.r=r; if(mv) u.ran=dist({q:oq,r:or},{q,r});
+    const [q,r]=kq(k), mv=k!==K(oq,or), mvd=u.moved; u.q=q;u.r=r; if(mv){u.ran=dist({q:oq,r:or},{q,r});u.moved=true}
     const b=!u.attacked&&!(still&&mv)?aiBestTarget(u):null, pos=aiPosScore(u,G,goal);
     const sa=(b?b.s*3:0)+pos; if(!A||sa>A.s) A={k,s:sa};
     if(!still||!mv){ if(!Bpos||pos>Bpos.s) Bpos={k,s:pos} }
-    u.ran=ran;
+    u.ran=ran; u.moved=mvd;
   }
   u.q=oq;u.r=or;
   const B=here?{s:here.s*3+Bpos.s}:null;
@@ -776,10 +806,10 @@ function colors(){
   st.setProperty("--p0",RACES[r0].c); st.setProperty("--p1",r0===r1?RACES[r1].alt:RACES[r1].c);
 }
 
-function newGame(r0,r1,heavy,terrain,roads,bal,ai){
+function newGame(r0,r1,heavy,terrain,roads,bal,ai,abil){
   S={players:[{race:r0,cr:500},{race:r1,cr:500}],cur:0,first:0,phase:"orders",round:1,heavy,terrain,nid:1,ents:[],log:[],winner:null,
      stats:{firstMine:[null,null],mines5:[null,null]}};
-  S.ai=ai??null; S.bal=bal||{}; S.map=terrain?genMap():{}; S.roads=roads?genRoads(S.map):[];
+  S.ai=ai??null; S.abil=!!abil; S.bal=bal||{}; S.map=terrain?genMap():{}; S.roads=roads?genRoads(S.map):[];
   const add=(o,kind,type,q,r)=>S.ents.push({id:S.nid++,owner:o,kind,type,q,r,dmg:0,moved:false,attacked:false,fresh:false,hired:false});
   add(0,"bld","base",-5,2); add(0,"bld","mine",-6,2); add(0,"unit","scout",-4,2); add(0,"unit","fighter",-4,1); add(0,"unit","spec",-5,3);
   add(1,"bld","base",5,-2); add(1,"bld","mine",6,-2); add(1,"unit","scout",4,-2); add(1,"unit","fighter",4,-1); add(1,"unit","spec",5,-3);
@@ -805,25 +835,26 @@ function endTurn(){
     e.dmg++; const dead=e.dmg>=maxHp(e); if(dead) S.ents=S.ents.filter(o=>o!==e);
     FX.push({t:"float",at:px(e.q,e.r),txt:"−1",cls:"rad"}); if(dead) FX.push({t:"boom",at:px(e.q,e.r),o:e.owner});
     log(`Радиация: ${ename(e)} на ${cn(e.q,e.r)} получает 1 урон${dead?" и гибнет":""}.`)});
+  S.ents.forEach(e=>{delete e.mark});
   S.cur=1-S.cur; if(S.cur===S.first) S.round++;
   ui={sel:null,mode:null,cell:null}; startTurn(); save(); render();
 }
 
 function stepCost(x,y,a,b){const t=terr(a,b);if(t==="forest")return 4;return roadE(K(x,y),K(a,b))?1:2} // в полушагах
 function reach(u){
-  const sp=CLS[u.type].spd*2, res=new Set(), seen=new Map([[K(u.q,u.r),0]]), q=[[u.q,u.r,0]];
+  const sp=spdOf(u)*2, ghost=has(u,"xar","fighter"), res=new Set(), seen=new Map([[K(u.q,u.r),0]]), q=[[u.q,u.r,0]];
   while(q.length){q.sort((m,n)=>m[2]-n[2]);const [x,y,d]=q.shift(); if(d>seen.get(K(x,y))) continue;
     if(d>0&&terr(x,y)==="sand") continue;
     for(const [a,b] of adj(x,y)){const k=K(a,b), nd=d+stepCost(x,y,a,b); if(nd>sp) continue; if(seen.has(k)&&seen.get(k)<=nd) continue;
-      const o=at(a,b); if(o&&(o.kind==="bld"||o.owner!==u.owner)) continue; const t=terr(a,b); if(t==="rock"||t==="water") continue;
+      const o=at(a,b); if(o&&(o.kind==="bld"||o.owner!==u.owner&&!ghost)) continue; const t=terr(a,b); if(t==="rock"||t==="water") continue;
       seen.set(k,nd); q.push([a,b,nd]); if(!o) res.add(k);}}
   return res;
 }
 function pathTo(u,goal){ // тот же поиск, что в reach, но с восстановлением пути
-  const sp=CLS[u.type].spd*2, seen=new Map([[K(u.q,u.r),0]]), prev=new Map(), q=[[u.q,u.r,0]];
+  const sp=spdOf(u)*2, ghost=has(u,"xar","fighter"), seen=new Map([[K(u.q,u.r),0]]), prev=new Map(), q=[[u.q,u.r,0]];
   while(q.length){q.sort((m,n)=>m[2]-n[2]);const [x,y,d]=q.shift(); if(d>seen.get(K(x,y))) continue; if(d>0&&terr(x,y)==="sand") continue;
     for(const [a,b] of adj(x,y)){const k=K(a,b), nd=d+stepCost(x,y,a,b); if(nd>sp||(seen.has(k)&&seen.get(k)<=nd)) continue;
-      const o=at(a,b); if(o&&(o.kind==="bld"||o.owner!==u.owner)) continue; const t=terr(a,b); if(t==="rock"||t==="water") continue;
+      const o=at(a,b); if(o&&(o.kind==="bld"||o.owner!==u.owner&&!ghost)) continue; const t=terr(a,b); if(t==="rock"||t==="water") continue;
       seen.set(k,nd); prev.set(k,K(x,y)); q.push([a,b,nd]);}}
   if(!seen.has(goal)) return null; const out=[]; let k=goal; while(k){out.push(k);k=prev.get(k)} return {path:out.reverse(),cost:seen.get(goal)/2};
 }
@@ -868,8 +899,24 @@ function doAttack(u,t){
   const kill=t.dmg>=maxHp(t); FX.push({t:"shot",ra:u.kind==="unit"?race(u.owner):null,mel:u.kind==="unit"&&CLS[u.type].rng===1,snd:u.kind==="unit"?`atk_${race(u.owner)}_${u.type}`:"shot",id:u.id,tid:t.id,o:u.owner,from:px(u.q,u.r),to:px(t.q,t.r),dmg,kill,big:t.kind==="bld"});
   if(kill){ S.ents=S.ents.filter(e=>e!==t); msg+=" Цель уничтожена."; if(t.type==="base"){S.winner=u.owner+1; S.stats.rounds=S.round} }
   else msg+=` Осталось ${maxHp(t)-t.dmg} HP.`;
+  if(u.kind==="unit") u.firstHit=true;
+  if(abOn()&&!S.winner) msg+=abilFx(u,t,kill);
   log(msg); after(u);
 }
+function hurt(e,n,by){ // урон от способности, без брони
+  e.dmg+=n; const dead=e.dmg>=maxHp(e);
+  FX.push({t:"float",at:px(e.q,e.r),txt:"−"+n,cls:"rad",delay:550});
+  if(dead){S.ents=S.ents.filter(o=>o!==e);FX.push({t:"boom",at:px(e.q,e.r),o:e.owner,big:e.kind==="bld"});if(e.type==="base"){S.winner=by.owner+1;S.stats.rounds=S.round}}
+  return dead}
+function abilFx(u,t,kill){
+  let out="";
+  const near=S.ents.filter(e=>e!==t&&e.owner!==u.owner&&dist(e,t)===1);
+  if(has(u,"dorg","giant")){const hit=near.sort((a,b)=>(maxHp(a)-a.dmg)-(maxHp(b)-b.dmg)).slice(0,2);
+    hit.forEach(e=>{const d=hurt(e,1,u);out+=` Сейсмический удар: ${ename(e)} −1${d?", уничтожен":""}.`})}
+  if(has(u,"vel","giant")){near.filter(e=>e.kind==="unit").forEach(e=>{const d=hurt(e,1,u);out+=` Энергетический удар: ${ename(e)} −1${d?", уничтожен":""}.`})}
+  if(has(u,"xar","giant")&&kill&&t.kind==="unit"&&u.dmg>0){const h=Math.min(2,u.dmg);u.dmg-=h;FX.push({t:"float",at:px(u.q,u.r),txt:"+"+h,cls:"inc",delay:600});out+=` Регенерация: +${h} HP.`}
+  if(has(u,"vel","spec")&&!kill){t.mark=true;FX.push({t:"float",at:px(t.q,t.r),txt:"◎",cls:"inc",delay:600});out+=` Наводка: ${ename(t)} получит +1 урон от Веларов.`}
+  return out}
 function after(u){
   toast(S.log[0],"ok",true);
   const still=u.kind==="unit"&&(!u.moved&&reach(u).size||!u.attacked&&targets(u).length);
@@ -1030,9 +1077,10 @@ function turnBanner(f){
 }
 const DEP={n:"Месторождение кристаллов",d:"Здесь можно построить шахту: +150 ◆ за ход. Нужно, чтобы рядом стоял ваш отряд и не было врагов.",w:"Кристаллы — единственный путь к доходу. За них и идёт борьба."};
 function hexInfo(q,r){const t=terr(q,r);return t?TINFO[t]:isDep(q,r)?DEP:isRoad(q,r)?ROAD:{n:"Открытая местность",d:"Обычный гекс: по нему можно ходить, здесь можно строить.",w:""}}
-function whyBlk(i){return i?`<p class="whyblk"><b>Что делает:</b> ${i.d}<br><b>Зачем:</b> ${i.w}</p>`:""}
+function whyBlk(i){return i?`<p class="whyblk">${i.ab?`<b>Способность:</b> ${i.ab}<br>`:""}<b>Что делает:</b> ${i.d}<br><b>Зачем:</b> ${i.w}</p>`:""}
+const roleOf=(r,c)=>abOn()?{...ROLE[c],ab:`<b>${ABIL[r][c].n}.</b> ${ABIL[r][c].d}`}:ROLE[c];
 function tipBody(i,title,sub,stats,tc,warn){
-  return `<div class="tt">${title}</div>${sub?`<div class="ts">${sub}</div>`:""}${stats?`<div class="tst">${stats.map(([k,v])=>`<span><b>${k}</b>${v}</span>`).join("")}</div>`:""}<dl><dt>Что делает</dt><dd>${i.d}</dd>${i.w?`<dt>Зачем</dt><dd>${i.w}</dd>`:""}</dl>${warn?`<div class="warn">${warn}</div>`:""}`}
+  return `<div class="tt">${title}</div>${sub?`<div class="ts">${sub}</div>`:""}${stats?`<div class="tst">${stats.map(([k,v])=>`<span><b>${k}</b>${v}</span>`).join("")}</div>`:""}<dl>${i.ab?`<dt>Способность</dt><dd>${i.ab}</dd>`:""}<dt>Что делает</dt><dd>${i.d}</dd>${i.w?`<dt>Зачем</dt><dd>${i.w}</dd>`:""}</dl>${warn?`<div class="warn">${warn}</div>`:""}`}
 function actPreview(q,r){
   const s=ui.sel&&byId(ui.sel), e=at(q,r), k=K(q,r);
   if(ui.mode){const cells=ui.mode.kind==="build"?placeCells(ui.mode.type):hireCells(byId(ui.mode.fid));
@@ -1049,12 +1097,12 @@ function tipForHex0(q,r){
   const e=at(q,r);
   if(e){const hp=maxHp(e)-e.dmg;
     if(e.kind==="unit"){const c=CLS[e.type];
-      return [tipBody(ROLE[e.type],ename(e),`${c.n}, ${pname(e.owner)}`,[["HP",`${hp}/${hpOf(e.type)}`],["Атака",c.atk],["Дальность",c.rng],["Скорость",c.spd],["Броня",armor(e)]],`var(--p${e.owner})`,e.fresh?"Новый: действует со следующего хода.":terr(q,r)==="ruins"?"Стоит в руинах: броня +1.":terr(q,r)==="rad"?"Стоит в радиации: получит 1 урон в конце хода.":terr(q,r)==="forest"?"Стоит в лесу: броня +1 против стрелков.":terr(q,r)==="sand"?"Стоит в песках: дальше двигаться в этот ход нельзя.":isRoad(q,r)?"Стоит на дороге: по дороге проходит вдвое дальше.":""),`var(--p${e.owner})`]}
+      return [tipBody(roleOf(race(e.owner),e.type),ename(e),`${c.n}, ${pname(e.owner)}`,[["HP",`${hp}/${hpOf(e.type)}`],["Атака",c.atk],["Дальность",c.rng],["Скорость",spdOf(e)],["Броня",armor(e)]],`var(--p${e.owner})`,e.fresh?"Новый: действует со следующего хода.":terr(q,r)==="ruins"?"Стоит в руинах: броня +1.":terr(q,r)==="rad"?"Стоит в радиации: получит 1 урон в конце хода.":terr(q,r)==="forest"?"Стоит в лесу: броня +1 против стрелков.":terr(q,r)==="sand"?"Стоит в песках: дальше двигаться в этот ход нельзя.":isRoad(q,r)?"Стоит на дороге: по дороге проходит вдвое дальше.":""),`var(--p${e.owner})`]}
     const st=[["HP",`${hp}/${BLD[e.type].hp}`]].concat(e.type==="tower"?[["Атака",2],["Дальность",2]]:[]).concat(e.type==="mine"?[["Доход","+150 ◆"]]:[]);
     return [tipBody(BINFO[e.type],BLD[e.type].n,pname(e.owner),st,"",e.fresh?"Новое: работает со следующего хода.":""),`var(--p${e.owner})`]}
   const i=hexInfo(q,r); return [tipBody(i,i.n,`Гекс ${cn(q,r)}`,null,"",""),i===DEP?"#6fe3ff":"var(--line)"]}
 function tipForKey(k){const [a,b]=k.split(":"), p=S.cur;
-  if(a==="u"){const c=CLS[b];return [tipBody(ROLE[b],RACES[race(p)].names[b],`${c.n}, ${c.cost} ◆`,[["HP",hpOf(b)],["Атака",c.atk],["Дальность",c.rng],["Скорость",c.spd],["Броня",c.arm]],"",""),`var(--p${p})`]}
+  if(a==="u"){const c=CLS[b];return [tipBody(roleOf(race(p),b),RACES[race(p)].names[b],`${c.n}, ${c.cost} ◆`,[["HP",hpOf(b)],["Атака",c.atk],["Дальность",c.rng],["Скорость",spdR(race(p),b)],["Броня",c.arm]],"",""),`var(--p${p})`]}
   const B=BLD[b], n=count(p,b), none=!placeCells(b).size;
   return [tipBody(BINFO[b],B.n,`${B.cost} ◆, построено ${n} из ${B.limit}`,null,"",none?(n>=B.limit?`Построено максимум: ${B.limit}.`:S.players[p].cr<B.cost?`Не хватает кристаллов: нужно ${B.cost} ◆.`:b==="mine"?"Нет свободного кристалла рядом с вашим отрядом.":b==="factory"?"Нет свободного гекса рядом с базой или фабрикой.":"Нет свободного гекса рядом с вашими зданиями."):""),`var(--p${p})`]}
 const TIP=$("tip"), HOVER=matchMedia("(hover:hover) and (pointer:fine)");
@@ -1086,7 +1134,7 @@ function moveWhyNot(s,q,r){const k=K(q,r);
   if(s.moved) return `${ename(s)} уже двигался в этот ход.`;
   if(terr(q,r)==="rock") return "Скала непроходима: обойдите её.";
   if(terr(q,r)==="water") return "Вода непроходима: обойдите её.";
-  const sp=CLS[s.type].spd;
+  const sp=spdOf(s);
   return dist(s,{q,r})>sp*2||dist(s,{q,r})>sp&&!isRoad(s.q,s.r)?`Слишком далеко: ${ename(s)} проходит до ${sp} ${sp===1?"гекса":"гексов"} за ход (по дороге вдвое больше).`:"Не хватает скорости: мешают лес, пески или занятые гексы."}
 function atkWhyNot(s,t){
   if(s.fresh) return `${ename(s)}: новый, действует со следующего хода.`;
@@ -1201,7 +1249,7 @@ function renderInfo(s){
   if(s){
     const hp=maxHp(s)-s.dmg, isU=s.kind==="unit";
     const c=isU?CLS[s.type]:null;
-    const stats=isU?[["HP",`${hp}/${hpOf(s.type)}`],["Атака",c.atk],["Дальность",c.rng],["Скорость",c.spd],["Броня",armor(s)],["Цена",c.cost+" ◆"]]
+    const stats=isU?[["HP",`${hp}/${hpOf(s.type)}`],["Атака",c.atk],["Дальность",c.rng],["Скорость",spdOf(s)],["Броня",armor(s)],["Цена",c.cost+" ◆"]]
       :[["HP",`${hp}/${BLD[s.type].hp}`]].concat(s.type==="tower"?[["Атака",2],["Дальность",2]]:[]).concat(s.type==="mine"?[["Доход","+150 ◆"]]:[]).concat(BLD[s.type].cost?[["Цена",BLD[s.type].cost+" ◆"]]:[]);
     let note="";
     if(s.owner===p&&!S.winner){
@@ -1211,7 +1259,7 @@ function renderInfo(s){
     }
     const la=leftActs(s);
     const stl=la?`<div class="passrow"><span class="stline">${la.mv===null?"":la.mv?"Движение: есть":"Движение: сделано"}${la.mv===null?"":" · "}${la.at?"Атака: есть":"Атака: сделана"}</span>${la.mv||la.at?`<button class="btn" id="passBtn" type="button">Пропустить</button>`:""}</div>`:"";
-    h=`<div class="unitcard o${s.owner}"><img src="${art(race(s.owner),s.type,true)}" alt="${ename(s)}"><div><div class="nm">${ename(s)}</div><div class="cls">${isU?c.n:"Строение"}, ${pname(s.owner)}, гекс ${cn(s.q,s.r)}</div><div class="statgrid">${stats.map(([k,v])=>`<span class="st"><small>${k}</small>${v}</span>`).join("")}</div>${note?`<p class="hint" style="margin:8px 0 0">${note}</p>`:""}${stl}</div></div>${whyBlk(isU?ROLE[s.type]:BINFO[s.type])}`;
+    h=`<div class="unitcard o${s.owner}"><img src="${art(race(s.owner),s.type,true)}" alt="${ename(s)}"><div><div class="nm">${ename(s)}</div><div class="cls">${isU?c.n:"Строение"}, ${pname(s.owner)}, гекс ${cn(s.q,s.r)}</div><div class="statgrid">${stats.map(([k,v])=>`<span class="st"><small>${k}</small>${v}</span>`).join("")}</div>${note?`<p class="hint" style="margin:8px 0 0">${note}</p>`:""}${stl}</div></div>${whyBlk(isU?roleOf(race(s.owner),s.type):BINFO[s.type])}`;
     if(s.owner===p&&s.type==="factory"&&S.phase==="buy"&&!s.fresh&&!s.hired&&!S.winner){
       const g=document.createElement("div"); g.className="shop";
       Object.keys(CLS).forEach(k=>{if(k==="heavy"&&!S.heavy)return;
@@ -1285,7 +1333,7 @@ $("board").addEventListener("keydown",ev=>{
     const nk=ARROW[ev.key].map(([a,b])=>K(q+a,r+b)).find(x=>CELLS.has(x)); if(!nk)return;
     const n=$("board").querySelector(`.hit[data-k="${nk}"]`); if(n){h.setAttribute("tabindex","-1");n.setAttribute("tabindex","0");focusK=nk;n.focus()} return}
   if(ev.key!=="Enter"&&ev.key!==" ")return;const h=ev.target.closest(".hit");if(!h)return;ev.preventDefault();const k=h.dataset.k;const [q,r]=k.split(",").map(Number);clickCell(q,r);const n=$("board").querySelector(`.hit[data-k="${k}"]`);if(n)n.focus()});
-$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])),setupAI?1:null);if(online)netCreate()};
+$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])),setupAI?1:null,$("abilChk").checked);if(online)netCreate()};
 $("cancelSetup").onclick=()=>closeDlg("setup");
 $("zoomBtn").onclick=()=>{const w=$("boardwrap"), on=!w.classList.contains("zoom"); w.classList.toggle("zoom",on); $("zoomBtn").setAttribute("aria-pressed",on); $("zoomBtn").textContent=on?"Уменьшить поле":"Увеличить поле";
   if(on){const b=S&&S.ents.find(e=>e.owner===S.cur&&e.type==="base"); requestAnimationFrame(()=>{const fr=b?(px(b.q,b.r)[0]-VB[0])/VB[2]:.5; w.scrollLeft=w.scrollWidth*fr-w.clientWidth/2})}};
