@@ -374,14 +374,14 @@ h1{letter-spacing:.01em}
     <div class="pick"><span class="lbl" id="lbl1">Игрок 2 · сектор справа вверху</span><div class="races" id="races1"></div></div>
     <label class="chk"><input type="checkbox" id="heavyChk" checked> Тяжёлые бойцы (5 HP, броня 1, 300 ◆)</label>
     <label class="chk"><input type="checkbox" id="terrChk" checked> Модуль местности: скалы, вода, лес, пески, руины, радиация (случайно)</label>
-    <label class="chk"><input type="checkbox" id="abilChk" checked> Способности рас: у каждого отряда своё свойство из карточек энциклопедии</label>
+    <label class="chk"><input type="checkbox" id="abilChk" checked> Способности рас: у каждого отряда своё свойство из карточек энциклопедии, плюс прорыв расы: Дорги — ракетная шахта, Ксарионы — подкоп (раз в ход нанять отряд в 2 гексах от вражеской фабрики), Велары — портал (раз в ход любой отряд переходит к своей Астре)</label>
     <label class="chk"><input type="checkbox" id="roadChk" checked> Случайные дороги: по дороге отряд идёт вдвое дальше</label>
     <fieldset class="balset"><legend>Баланс для плейтеста</legend>
     <label class="chk"><input type="checkbox" id="b_still"> 1. «Стоял или стрелял»: специалист за ход либо двигается, либо стреляет</label>
     <label class="chk"><input type="checkbox" id="b_close"> 2. Слаб в упор: если рядом враг, специалист наносит на 1 меньше</label>
     <label class="chk"><input type="checkbox" id="b_hp2"> 3. У специалиста 2 HP вместо 3</label>
-    <label class="chk"><input type="checkbox" id="b_charge"> 4. Рывок: отряд ближнего боя, прошедший за ход 2+ гекса, бьёт на +1</label>
-    <label class="chk"><input type="checkbox" id="b_block"> 5. Линия огня: любой отряд между стрелком и целью закрывает выстрел</label>
+    <label class="chk"><input type="checkbox" id="b_charge" checked> 4. Рывок: отряд ближнего боя, прошедший за ход 2+ гекса, бьёт на +1</label>
+    <label class="chk"><input type="checkbox" id="b_block" checked> 5. Линия огня: любой отряд между стрелком и целью закрывает выстрел</label>
     </fieldset>
     <p class="hint" style="margin:0">Первого игрока выберет жребий. В базовой игре расы различаются только обликом и названиями.</p>
     <div class="row"><button class="btn primary" id="startBtn" type="button" style="width:auto">Начать партию</button><button class="btn" id="cancelSetup" type="button">Отмена</button></div>
@@ -444,7 +444,7 @@ const BLD={
   base:{n:"Главная база",hp:12},
   mine:{n:"Шахта",hp:5,cost:300,limit:4},
   factory:{n:"Фабрика",hp:5,cost:400,limit:2},
-  tower:{n:"Башня",hp:4,cost:200,limit:4,atk:2,rng:2},
+  tower:{n:"Башня",hp:4,cost:300,limit:4,atk:2,rng:2},
   silo:{n:"Ракетная шахта",hp:4,cost:500,limit:1,charge:3,reload:4,race:"dorg"}
 };
 /* Ядерный удар Доргов: центр и 6 соседних гексов, без брони, по всем, включая свои; в центре радиация на 2 раунда */
@@ -465,14 +465,14 @@ const ROLE={
   scout:{d:"Проходит 3 гекса за ход, атака 1. Самый дешёвый отряд.",w:"Первым добегает до кристаллов, разведывает и добивает раненых. В бою долго не живёт."},
   fighter:{d:"Проходит 2 гекса за ход, атака 2 по соседнему гексу.",w:"Основа армии: занимает кристаллы, охраняет шахты и прикрывает стрелков."},
   heavy:{d:"Проходит 1 гекс за ход, атака 2. Броня 1 уменьшает каждый полученный удар на 1.",w:"Стена: его трудно убить, хорошо держит важный гекс или проход."},
-  spec:{d:"Стреляет на 2 гекса, то есть через соседний гекс.",w:"Бьёт врага из-за спин своих бойцов, не подставляясь под ответный удар."},
-  giant:{d:"8 HP и атака 3, но проходит лишь 1 гекс за ход.",w:"Таран для прорыва: быстро ломает башни, шахты и главную базу."}
+  spec:{d:"Стреляет на 2 гекса, то есть через соседний гекс. Осадный выстрел: если в этот ход не двигался, бьёт здания на 3 гекса с уроном 1, но после этого не двигается.",w:"Бьёт врага из-за спин своих бойцов, не подставляясь под ответный удар."},
+  giant:{d:"8 HP и атака 3, по строениям 4, но проходит лишь 1 гекс за ход.",w:"Таран для прорыва: быстро ломает башни, шахты и главную базу."}
 };
 const BINFO={
   base:{d:"Главное здание расы, 12 HP. Не двигается и не стреляет.",w:"Цель всей игры: разрушите базу врага — победа, потеряете свою — поражение."},
   mine:{d:"Приносит +150 ◆ в начале каждого вашего хода. Ставится только на кристалл, рядом с которым стоит ваш отряд и нет врагов.",w:"Единственный источник дохода. Больше шахт — больше отрядов и зданий. Максимум 4."},
   factory:{d:"Раз в ход, в фазе покупок, нанимает один отряд на свободный гекс рядом с собой.",w:"Без фабрики нельзя пополнить армию. Ставьте ближе к фронту. Максимум 2."},
-  tower:{d:"Раз в ход стреляет: атака 2, дальность 2. Не двигается.",w:"Дешёвая оборона базы и шахт от быстрых налётов. Максимум 4."},
+  tower:{d:"Раз в ход стреляет: атака 2, дальность 2. Не двигается.",w:"Оборона базы и шахт от быстрых налётов. Максимум 4."},
   silo:{d:`Только у Доргов. Заряжается ${BLD.silo.charge} хода, затем в фазе приказов бьёт ядерной ракетой в любой гекс поля: −${NUKE.c} HP в центре и −${NUKE.ring} HP на 6 соседних гексах, броня не спасает. Задевает и свои отряды. В центре на ${NUKE.fall} раунда остаётся радиация. После пуска перезарядка ${BLD.silo.reload} хода.`,w:"Осадное оружие: ломает скопления войск и главную базу издалека. Противник видит таймер и может снести шахту, пока она заряжается. Максимум 1."}
 };
 const TINFO={
@@ -513,9 +513,10 @@ const spdOf=u=>spdR(race(u.owner),u.type);
 const hpOf=t=>t==="spec"&&bal("hp2")?2:CLS[t].hp;
 const maxHp=e=>e.kind==="unit"?hpOf(e.type):BLD[e.type].hp;
 const foeNear=u=>adj(u.q,u.r).some(([a,b])=>{const o=at(a,b);return o&&o.kind==="unit"&&o.owner!==u.owner});
-function atkVal(u,t){let a=atkStats(u).atk, arm=armor(t,u);
+function atkVal(u,t){if(t.kind==="bld"&&dist(u,t)===3) return 1; let a=atkStats(u).atk, arm=armor(t,u);
   if(has(u,"dorg","scout")&&!u.firstHit) a++;
   if(has(u,"dorg","spec")&&t.kind==="bld") a++;
+  if(u.kind==="unit"&&u.type==="giant"&&t.kind==="bld") a++; // осада: гиганты сильнее по строениям
   if(has(u,"xar","scout")&&!u.moved) a++;
   if(t.mark&&u.kind==="unit"&&race(u.owner)==="vel"&&abOn()) a++;
   if(has(u,"dorg","fighter")) arm=Math.max(0,arm-1);
@@ -542,10 +543,17 @@ const hexPts=(x,y,rad=HS)=>Array.from({length:6},(_,i)=>corner(x,y,i,rad).map(v=
 
 function los(a,b){
   if(dist(a,b)<2) return true;
+  if(dist(a,b)>2) return [1e-3,-1e-3].some(eps=>lineHexes(a,b,eps).every(([q,r])=>!cover(q,r))); // осадный выстрел на 3
   const mids=DIRS.map(([x,y])=>[a.q+x,a.r+y]).filter(([q,r])=>dist({q,r},b)===1);
-  const cover=(q,r)=>terr(q,r)==="rock"||(bal("block")&&(o=>!!o&&o.kind==="unit")(at(q,r)));
   return !mids.every(([q,r])=>cover(q,r));
 }
+const cover=(q,r)=>terr(q,r)==="rock"||(bal("block")&&(o=>!!o&&o.kind==="unit")(at(q,r)));
+function lineHexes(a,b,eps){ // гексы строго между a и b по прямой, со сдвигом eps для линий по ребру
+  const n=dist(a,b), out=[], A=[a.q+eps,a.r+eps,-a.q-a.r-2*eps], B=[b.q,b.r,-b.q-b.r];
+  for(let i=1;i<n;i++){const c=A.map((v,j)=>v+(B[j]-v)*i/n); let [x,y,z]=c.map(Math.round);
+    const d=[Math.abs(x-c[0]),Math.abs(y-c[1]),Math.abs(z-c[2])]; if(d[0]>d[1]&&d[0]>d[2])x=-y-z; else if(d[1]>d[2])y=-x-z;
+    out.push([x,y])}
+  return out}
 
 /* случайная карта: местность и дороги, симметрия (q,r)→(−q,−r) */
 const mir=k=>{const [q,r]=k.split(",").map(Number);return K(-q,-r)};
@@ -784,6 +792,15 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null}catch(e){return null}}
 function snap(){hist.push(JSON.stringify(S));if(hist.length>60)hist.shift()}
 function log(t){S.log.unshift(t);if(S.log.length>80)S.log.pop()}
+// журнал для анализа: короткие записи в S.ev (откатываются вместе с «Отменить»), на сервер уходят в конце каждого хода
+function ev(o){if(!S||!S.gid)return;const L=S.ev||(S.ev=[]);if(L.length<3000)L.push({r:S.round,p:S.cur,...o})}
+const baseHp=p=>{const b=S.ents.find(e=>e.owner===p&&e.type==="base");return b?maxHp(b)-b.dmg:0};
+function sendLog(){if(!S||!S.gid||!/^https?:$/.test(location.protocol))return;
+  const rec={gid:S.gid,lv:1,mode:NET.on?"net":S.ai!=null?"ai":"local",races:[race(0),race(1)],first:S.first,ai:S.ai,
+    opts:{heavy:!!S.heavy,terrain:!!S.terrain,roads:!!(S.roads&&S.roads.length),abil:!!S.abil,bal:BALK.filter(bal)},
+    round:S.round,winner:S.winner?S.winner-1:null,stats:S.stats,ev:S.ev||[]};
+  const body=JSON.stringify(rec);
+  fetch("api/log",{method:"POST",headers:{"Content-Type":"application/json"},body,keepalive:body.length<60000}).catch(()=>{})}
 function colors(){
   if(!S) return; const r0=race(0), r1=race(1), st=document.documentElement.style;
   st.setProperty("--p0",RACES[r0].c); st.setProperty("--p1",r0===r1?RACES[r1].alt:RACES[r1].c);
@@ -791,7 +808,7 @@ function colors(){
 
 function newGame(r0,r1,heavy,terrain,roads,bal,ai,abil){
   S={players:[{race:r0,cr:500},{race:r1,cr:500}],cur:0,first:0,phase:"orders",round:1,heavy,terrain,nid:1,ents:[],log:[],winner:null,
-     stats:{firstMine:[null,null],mines5:[null,null]}};
+     stats:{firstMine:[null,null],mines5:[null,null]},gid:Date.now().toString(36)+Math.random().toString(36).slice(2,10),ev:[]};
   S.ai=ai??null; S.abil=!!abil; S.bal=bal||{}; S.map=terrain?genMap():{}; S.roads=roads?genRoads(S.map):[];
   const add=(o,kind,type,q,r)=>S.ents.push({id:S.nid++,owner:o,kind,type,q,r,dmg:0,moved:false,attacked:false,fresh:false,hired:false});
   add(0,"bld","base",-5,2); add(0,"bld","mine",-6,2); add(0,"unit","scout",-4,2); add(0,"unit","fighter",-4,1); add(0,"unit","spec",-5,3);
@@ -807,10 +824,11 @@ function startTurn(){
   S.ents.forEach(e=>{if(e.owner===p){e.moved=false;e.attacked=false;e.fresh=false;e.hired=false;e.ran=0;e.lock=null}});
   S.ents.forEach(e=>{if(e.owner===p&&e.type==="silo"&&e.charge>0)e.charge--});
   if(S.fall) for(const k in S.fall){const f=S.fall[k]; if(f.p===p&&S.round>=f.until) delete S.fall[k]}
-  const inc=mines(p)*INCOME; S.players[p].cr+=inc; S.phase="orders";
+  const inc=mines(p)*INCOME; S.players[p].cr+=inc; S.phase="orders"; S.players[p].tunnel=false; S.players[p].portal=false;
   FX.push({t:"turn",p,inc});
   S.ents.filter(e=>e.owner===p&&e.type==="mine").forEach((e,i)=>FX.push({t:"float",at:px(e.q,e.r),txt:"+"+INCOME,cls:"inc",delay:900+i*140}));
   log(`Раунд ${S.round}. Ходят ${pname(p)}. Доход +${inc} (шахт: ${mines(p)}).`);
+  ev({a:"turn",cr:S.players[p].cr,inc,mines:mines(p),fac:count(p,"factory"),tow:count(p,"tower"),units:S.ents.filter(e=>e.owner===p&&e.kind==="unit").map(e=>e.type),base:baseHp(p)});
 }
 
 function endTurn(){
@@ -819,14 +837,18 @@ function endTurn(){
   S.ents.filter(e=>e.owner===S.cur&&e.kind==="unit"&&terr(e.q,e.r)==="rad").forEach(e=>{
     e.dmg++; const dead=e.dmg>=maxHp(e); if(dead) S.ents=S.ents.filter(o=>o!==e);
     FX.push({t:"float",at:px(e.q,e.r),txt:"−1",cls:"rad"}); if(dead) FX.push({t:"boom",at:px(e.q,e.r),o:e.owner});
-    log(`Радиация: ${ename(e)} на ${cn(e.q,e.r)} получает 1 урон${dead?" и гибнет":""}.`)});
+    ev({a:"rad",u:e.type,kill:dead}); log(`Радиация: ${ename(e)} на ${cn(e.q,e.r)} получает 1 урон${dead?" и гибнет":""}.`)});
   S.ents.forEach(e=>{delete e.mark});
   S.cur=1-S.cur; if(S.cur===S.first) S.round++;
-  ui={sel:null,mode:null,cell:null}; startTurn(); save(); render();
+  ui={sel:null,mode:null,cell:null}; startTurn(); save(); render(); sendLog();
 }
 
 function stepCost(x,y,a,b){const t=terr(a,b);if(t==="forest")return 4;return roadE(K(x,y),K(a,b))?1:2} // в полушагах
-function reach(u){
+const portalOk=u=>abOn()&&u.kind==="unit"&&race(u.owner)==="vel"&&!S.players[u.owner].portal;
+function portalCells(u){const s=new Set();if(!portalOk(u))return s; // портал: к любому своему разведчику (Астре)
+  S.ents.filter(e=>e!==u&&e.owner===u.owner&&e.type==="scout").forEach(sc=>adj(sc.q,sc.r).forEach(([a,b])=>{if(free(a,b))s.add(K(a,b))}));return s}
+function reach(u){const s=walk(u);portalCells(u).forEach(k=>s.add(k));return s}
+function walk(u){
   const sp=spdOf(u)*2, ghost=has(u,"xar","fighter"), res=new Set(), seen=new Map([[K(u.q,u.r),0]]), q=[[u.q,u.r,0]];
   while(q.length){q.sort((m,n)=>m[2]-n[2]);const [x,y,d]=q.shift(); if(d>seen.get(K(x,y))) continue;
     if(d>0&&terr(x,y)==="sand") continue;
@@ -846,17 +868,18 @@ function pathTo(u,goal){ // тот же поиск, что в reach, но с в�
 function drawPath(k){const g=$("pathl"); if(!g) return; g.innerHTML="";
   if(k&&ui.mode&&ui.mode.kind==="nuke"){const [q,r]=kq(k);[[q,r],...adj(q,r)].forEach(([a,b],i)=>{if(!cell(a,b))return;const [x,y]=px(a,b);mk("polygon",{class:"nka"+(i?"":" c"),points:hexPts(x,y,HS-2)},g)});return}
   const s=ui.sel&&byId(ui.sel); if(!k||!s||!canAct(s)||s.kind!=="unit"||s.moved||ui.mode) return;
-  if(!reach(s).has(k)) return; const r=pathTo(s,k); if(!r) return;
+  if(!reach(s).has(k)) return; const r=pathTo(s,k); if(!r) return; // через портал путь не рисуется
   const pts=r.path.map(kk=>px(...kk.split(",").map(Number))), [ex,ey]=pts[pts.length-1], [bx,by]=pts[pts.length-2]||pts[0], a=Math.atan2(ey-by,ex-bx);
   mk("polyline",{class:"pathl",points:pts.map(p=>p.join(",")).join(" ")},g);
   mk("polygon",{class:"pathh",points:[[ex+Math.cos(a)*6,ey+Math.sin(a)*6],[ex+Math.cos(a+2.4)*7,ey+Math.sin(a+2.4)*7],[ex+Math.cos(a-2.4)*7,ey+Math.sin(a-2.4)*7]].map(p=>p.join(",")).join(" ")},g);
   mk("circle",{cx:ex,cy:ey-HS*.55,r:9,fill:"#fff"},g); const t=mk("text",{class:"pathc",x:ex,y:ey-HS*.55},g); t.textContent=String(r.cost).replace(".",",");
 }
 function atkStats(e){return e.kind==="unit"?{atk:CLS[e.type].atk,rng:CLS[e.type].rng}:{atk:BLD.tower.atk,rng:BLD.tower.rng}}
-function targets(u){const {rng}=atkStats(u);return S.ents.filter(e=>e.owner!==u.owner&&dist(e,u)<=rng&&los(u,e)).map(e=>e.id)}
+const siege=u=>u.kind==="unit"&&u.type==="spec"&&!u.moved; // осадный выстрел: стоящий специалист бьёт здания на 3 гекса
+function targets(u){const {rng}=atkStats(u);return S.ents.filter(e=>e.owner!==u.owner&&(dist(e,u)<=rng||e.kind==="bld"&&dist(e,u)===3&&siege(u))&&los(u,e)).map(e=>e.id)}
 function leftActs(e){if(e.owner!==S.cur||e.fresh||S.phase!=="orders"||S.winner)return null;if(e.kind==="unit")return {mv:!e.moved,at:!e.attacked};if(e.type==="tower")return {mv:null,at:!e.attacked};if(nukeReady(e)&&!e.attacked)return {mv:null,at:true};return null}
 function pending(){return S.ents.filter(e=>{const l=leftActs(e);return l&&(l.mv||l.at)})}
-function doPass(u){if(!myTurn())return notMine();snap();const left=u.kind==="unit"&&!u.moved&&!u.attacked?"пропускает приказы":"заканчивает приказы";u.moved=true;u.attacked=true;log(`${ename(u)} (${cn(u.q,u.r)}) ${left}.`);ui.sel=null;save();render();toast(S.log[0],"ok",true)}
+function doPass(u){if(!myTurn())return notMine();snap();const left=u.kind==="unit"&&!u.moved&&!u.attacked?"пропускает приказы":"заканчивает приказы";u.moved=true;u.attacked=true;ev({a:"pass",u:u.type});log(`${ename(u)} (${cn(u.q,u.r)}) ${left}.`);ui.sel=null;save();render();toast(S.log[0],"ok",true)}
 function canAct(e){return e.owner===S.cur&&!e.fresh&&!S.winner&&S.phase==="orders"&&(e.kind==="unit"||e.type==="tower")}
 
 function controlled(p,q,r){
@@ -876,13 +899,18 @@ function placeCells(type){
   }
   return out;
 }
-function hireCells(f){const s=new Set();adj(f.q,f.r).forEach(([a,b])=>{const t=terr(a,b);if(!at(a,b)&&t!=="rock"&&t!=="water")s.add(K(a,b))});return s}
+const free=(a,b)=>{const t=terr(a,b);return !at(a,b)&&t!=="rock"&&t!=="water"};
+const tunnelOk=p=>abOn()&&race(p)==="xar"&&!S.players[p].tunnel;
+function tunnelCells(p){const s=new Set();if(!tunnelOk(p))return s; // подкоп: свободные гексы в 2 от вражеской фабрики
+  S.ents.filter(e=>e.owner!==p&&e.type==="factory").forEach(f=>CELLS.forEach(c=>{if(dist(c,f)===2&&free(c.q,c.r))s.add(K(c.q,c.r))}));return s}
+function hireCells(f){const s=new Set();adj(f.q,f.r).forEach(([a,b])=>{if(free(a,b))s.add(K(a,b))});tunnelCells(f.owner).forEach(k=>s.add(k));return s}
 
-function doMove(u,q,r){snap();log(`${ename(u)}: ${cn(u.q,u.r)} → ${cn(q,r)}.`);FX.push({t:"move",id:u.id,from:px(u.q,u.r),to:px(q,r)});u.ran=dist(u,{q,r});u.q=q;u.r=r;u.moved=true;if(u.type==="spec"&&bal("still")&&!u.attacked){u.attacked=true;u.lock="moved"}after(u)}
+function doMove(u,q,r){snap();const port=!walk(u).has(K(q,r));if(port)S.players[u.owner].portal=true;
+  ev({a:"mv",u:u.type,from:cn(u.q,u.r),to:cn(q,r),...(port?{portal:1}:{})});log(`${ename(u)}: ${cn(u.q,u.r)} → ${cn(q,r)}${port?" через портал":""}.`);FX.push({t:"move",id:u.id,from:px(u.q,u.r),to:px(q,r)});if(port)FX.push({t:"portal",from:px(u.q,u.r),to:px(q,r)},{t:"float",at:px(q,r),txt:"портал",cls:"inc",delay:300});u.ran=port?0:dist(u,{q,r});u.q=q;u.r=r;u.moved=true;if(u.type==="spec"&&bal("still")&&!u.attacked){u.attacked=true;u.lock="moved"}after(u)}
 function doAttack(u,t){
-  snap(); const dmg=atkVal(u,t); t.dmg+=dmg; u.attacked=true; if(u.kind==="bld") u.moved=true; if(u.type==="spec"&&bal("still")&&!u.moved){u.moved=true;u.lock="shot"}
-  let msg=`${ename(u)} → ${ename(t)} (${cn(t.q,t.r)}): −${dmg} HP.`;
-  const kill=t.dmg>=maxHp(t); FX.push({t:"shot",ra:u.kind==="unit"?race(u.owner):null,mel:u.kind==="unit"&&CLS[u.type].rng===1,snd:u.kind==="unit"?`atk_${race(u.owner)}_${u.type}`:"shot",id:u.id,tid:t.id,o:u.owner,from:px(u.q,u.r),to:px(t.q,t.r),dmg,kill,big:t.kind==="bld"});
+  snap(); const far=dist(u,t)===3, dmg=atkVal(u,t); t.dmg+=dmg; u.attacked=true; if(far) u.moved=true; if(u.kind==="bld") u.moved=true; if(u.type==="spec"&&bal("still")&&!u.moved){u.moved=true;u.lock="shot"}
+  let msg=`${ename(u)}${far?" (осадный выстрел)":""} → ${ename(t)} (${cn(t.q,t.r)}): −${dmg} HP.`;
+  const kill=t.dmg>=maxHp(t); ev({a:"atk",u:u.type,t:t.type,dmg,kill,...(far?{far:1}:{})}); FX.push({t:"shot",ra:u.kind==="unit"?race(u.owner):null,mel:u.kind==="unit"&&CLS[u.type].rng===1,snd:u.kind==="unit"?`atk_${race(u.owner)}_${u.type}`:"shot",id:u.id,tid:t.id,o:u.owner,from:px(u.q,u.r),to:px(t.q,t.r),dmg,kill,big:t.kind==="bld"});
   if(kill){ S.ents=S.ents.filter(e=>e!==t); msg+=" Цель уничтожена."; if(t.type==="base"){S.winner=u.owner+1; S.stats.rounds=S.round} }
   else msg+=` Осталось ${maxHp(t)-t.dmg} HP.`;
   if(u.kind==="unit") u.firstHit=true;
@@ -890,7 +918,7 @@ function doAttack(u,t){
   log(msg); after(u);
 }
 function hurt(e,n,by){ // урон от способности, без брони
-  e.dmg+=n; const dead=e.dmg>=maxHp(e);
+  e.dmg+=n; const dead=e.dmg>=maxHp(e); ev({a:"abil",u:by.type,t:e.type,dmg:n,kill:dead});
   FX.push({t:"float",at:px(e.q,e.r),txt:"−"+n,cls:"rad",delay:550});
   if(dead){S.ents=S.ents.filter(o=>o!==e);FX.push({t:"boom",at:px(e.q,e.r),o:e.owner,big:e.kind==="bld"});if(e.type==="base"){S.winner=by.owner+1;S.stats.rounds=S.round}}
   return dead}
@@ -916,19 +944,22 @@ function after(u){
   toast(S.log[0],"ok",true);
   const still=u.kind==="unit"&&(!u.moved&&reach(u).size||!u.attacked&&targets(u).length);
   ui.sel=still&&!S.winner?u.id:null; ui.mode=null; save(); render();
-  if(S.winner) showWin();
+  if(S.winner){ev({a:"win",w:S.winner-1});sendLog();showWin()}
 }
 function doBuild(type,q,r){
   snap(); const p=S.cur; S.players[p].cr-=BLD[type].cost;
   S.ents.push({id:S.nid,owner:p,kind:"bld",type,q,r,dmg:0,moved:false,attacked:false,fresh:true,hired:false,...(type==="silo"?{charge:BLD.silo.charge}:{})}); FX.push({t:"spawn",id:S.nid++,at:px(q,r)});
+  ev({a:"build",t:type,at:cn(q,r)});
   if(type==="mine"&&S.stats.firstMine[p]===null) S.stats.firstMine[p]=S.round;
   log(`${pname(p)} строят: ${BLD[type].n}, ${cn(q,r)} (−${BLD[type].cost} ◆).`);
   ui.mode=null; save(); render(); toast(S.log[0],"ok",true);
 }
 function doHire(f,cls,q,r){
-  snap(); const p=S.cur; S.players[p].cr-=CLS[cls].cost; f.hired=true;
+  snap(); const p=S.cur; S.players[p].cr-=CLS[cls].cost; f.hired=true; const tun=dist(f,{q,r})>1; if(tun) S.players[p].tunnel=true;
+  ev({a:"hire",t:cls,at:cn(q,r),...(tun?{tunnel:1}:{})});
   S.ents.push({id:S.nid,owner:p,kind:"unit",type:cls,q,r,dmg:0,moved:false,attacked:false,fresh:true,hired:false}); FX.push({t:"spawn",id:S.nid++,at:px(q,r)});
-  log(`${pname(p)} нанимают: ${RACES[race(p)].names[cls]}, ${cn(q,r)} (−${CLS[cls].cost} ◆).`);
+  if(tun) FX.push({t:"tunnel",at:px(q,r)},{t:"float",at:px(q,r),txt:"подкоп",cls:"dig",delay:200});
+  log(`${pname(p)} нанимают: ${RACES[race(p)].names[cls]}, ${cn(q,r)}${tun?" — подкоп к вражеской фабрике":""} (−${CLS[cls].cost} ◆).`);
   ui.mode=null; ui.sel=null; save(); render(); toast(S.log[0],"ok",true);
 }
 
@@ -1036,7 +1067,9 @@ function playFX(){
     if(f.t==="nuke") nukeFx(L,f);
     if(f.t==="nope"){const [x,y]=f.at, h=mk("polygon",{points:hexPts(x,y,HS-2),fill:"rgba(255,178,63,.18)",stroke:"#ffb23f","stroke-width":2.5},L);
       h.animate([{transform:"translate(0,0)",opacity:1},{transform:"translate(-3px,0)"},{transform:"translate(3px,0)"},{transform:"translate(-2px,0)"},{transform:"translate(0,0)",opacity:1,offset:.5},{opacity:0}],{duration:650,fill:"forwards"}).onfinish=()=>h.remove()}
-    if(f.t==="float") floatTxt(L,f.at,f.txt,f.cls==="inc"?"#8ff3ff":"#7dff8a",f.delay||0);
+    if(f.t==="float") floatTxt(L,f.at,f.txt,f.cls==="inc"?"#8ff3ff":f.cls==="dig"?"#ffb86b":"#7dff8a",f.delay||0);
+    if(f.t==="portal"){ripple(L,f.from,"#8ff3ff",0);ripple(L,f.to,"#8ff3ff",120);ripple(L,f.to,"#e9e4cf",320)} // портал: световые кольца на входе и выходе
+    if(f.t==="tunnel"){debris(L,f.at,false);ripple(L,f.at,"#ffb86b",0)} // подкоп: земля летит из-под гекса
     if(f.t==="turn") turnBanner(f);
   });
 }
@@ -1343,7 +1376,7 @@ function drawPick(){
 }
 let setupAI=false;
 function openSetup(online,ai){ NET.setupOnline=!!online; setupAI=!online&&!!ai; $("setupTitle").textContent=online?"Новая партия по сети":setupAI?"Новая партия против ИИ":"Новая партия";
-  $("lbl0").textContent=(setupAI?"Вы":"Игрок 1")+" · сектор слева внизу"; $("lbl1").textContent=(setupAI?"ИИ":"Игрок 2")+" · сектор справа вверху"; $("startBtn").textContent=online?"Создать и получить ссылку":"Начать партию"; if(S) {pick=[race(0),race(1)];BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
+  $("lbl0").textContent=(setupAI?"Вы":"Игрок 1")+" · сектор слева внизу"; $("lbl1").textContent=(setupAI?"ИИ":"Игрок 2")+" · сектор справа вверху"; $("startBtn").textContent=online?"Создать и получить ссылку":"Начать партию"; if(S) {pick=[race(0),race(1)];if(bal("d2"))BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
 
 $("board").addEventListener("click",ev=>{const h=ev.target.closest(".hit");if(!h)return;const [q,r]=h.dataset.k.split(",").map(Number);clickCell(q,r)});
 const ARROW={ArrowRight:[[1,0]],ArrowLeft:[[-1,0]],ArrowUp:[[0,-1],[1,-1]],ArrowDown:[[0,1],[-1,1]]};
@@ -1353,7 +1386,7 @@ $("board").addEventListener("keydown",ev=>{
     const nk=ARROW[ev.key].map(([a,b])=>K(q+a,r+b)).find(x=>CELLS.has(x)); if(!nk)return;
     const n=$("board").querySelector(`.hit[data-k="${nk}"]`); if(n){h.setAttribute("tabindex","-1");n.setAttribute("tabindex","0");focusK=nk;n.focus()} return}
   if(ev.key!=="Enter"&&ev.key!==" ")return;const h=ev.target.closest(".hit");if(!h)return;ev.preventDefault();const k=h.dataset.k;const [q,r]=k.split(",").map(Number);clickCell(q,r);const n=$("board").querySelector(`.hit[data-k="${k}"]`);if(n)n.focus()});
-$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])),setupAI?1:null,$("abilChk").checked);if(online)netCreate()};
+$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,{...Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])),d2:true},setupAI?1:null,$("abilChk").checked);if(online)netCreate()};
 $("cancelSetup").onclick=()=>closeDlg("setup");
 $("zoomBtn").onclick=()=>{const w=$("boardwrap"), on=!w.classList.contains("zoom"); w.classList.toggle("zoom",on); $("zoomBtn").setAttribute("aria-pressed",on); $("zoomBtn").textContent=on?"Уменьшить поле":"Увеличить поле";
   if(on){const b=S&&S.ents.find(e=>e.owner===S.cur&&e.type==="base"); requestAnimationFrame(()=>{const fr=b?(px(b.q,b.r)[0]-VB[0])/VB[2]:.5; w.scrollLeft=w.scrollWidth*fr-w.clientWidth/2})}};
