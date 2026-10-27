@@ -98,6 +98,11 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,3.4vw,32px);m
 .passrow{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .passrow .btn{width:auto}
 .stline{font-size:12px;color:var(--muted)}
+.board .nka{fill:rgba(255,122,47,.22);stroke:#ffb23f;stroke-width:1.6;stroke-dasharray:4 3}
+.board .nka.c{fill:rgba(255,210,63,.38);stroke:#ffd23f;stroke-width:2.4;stroke-dasharray:none}
+.board .nkb rect{fill:#1a1408;stroke:#ffd23f;stroke-width:1.2}
+.board .nkb text{fill:#ffd23f;font-family:var(--display);font-weight:700;font-size:10px;text-anchor:middle;dominant-baseline:central}
+.board .nkb.rd rect{fill:#ffd23f}.board .nkb.rd text{fill:#1a1408}
 .board .tagb{fill:var(--pc);stroke:#05070f;stroke-width:1.5}
 .board .tagt{fill:#0a0d18;font-family:var(--display);font-weight:700;font-size:10px;text-anchor:middle;dominant-baseline:central}
 .board .hph{fill:var(--move)}.board .hpm{fill:var(--place)}.board .hpl{fill:var(--hit)}
@@ -339,7 +344,7 @@ h1{letter-spacing:.01em}
       <details class="legend"><summary>Как играть</summary><ul>
         <li><b>Цель:</b> разрушить главную базу противника.</li>
         <li><b>Приказы:</b> каждый отряд один раз двигается (➜) и один раз атакует (⚔). Цветной значок — действие доступно, серый — сделано.</li>
-        <li><b>Покупки:</b> шахты дают +150 ◆ за ход, фабрика нанимает один отряд за ход, башня стреляет сама.</li>
+        <li><b>Покупки:</b> шахты дают +150 ◆ за ход, фабрика нанимает один отряд за ход, башня стреляет сама. У Доргов (со способностями рас) есть ракетная шахта: раз в несколько ходов она бьёт ядерной ракетой в любой гекс.</li>
         <li><b>Новое</b> (пунктирная рамка) действует со следующего хода.</li>
         <li><b>Местность</b> (каждую партию новая): ▲ скала и ≈ вода непроходимы (вода не мешает стрелять), ♣ лес стоит 2 шага и даёт броню +1 против стрелков, ∴ пески останавливают движение, ⌂ руины дают броню +1, ☢ радиация ранит.</li>
         <li><b>Дороги:</b> шаг вдоль дороги стоит полшага, по дороге отряд проходит вдвое дальше.</li>
@@ -439,8 +444,11 @@ const BLD={
   base:{n:"Главная база",hp:12},
   mine:{n:"Шахта",hp:5,cost:300,limit:4},
   factory:{n:"Фабрика",hp:5,cost:400,limit:2},
-  tower:{n:"Башня",hp:4,cost:200,limit:4,atk:2,rng:2}
+  tower:{n:"Башня",hp:4,cost:200,limit:4,atk:2,rng:2},
+  silo:{n:"Ракетная шахта",hp:4,cost:500,limit:1,charge:3,reload:4,race:"dorg"}
 };
+/* Ядерный удар Доргов: центр и 6 соседних гексов, без брони, по всем, включая свои; в центре радиация на 2 раунда */
+const NUKE={c:4,ring:2,fall:2};
 /* Поле: 7 секторов по 19 гексов (как концепт из энциклопедии). Осевые координаты q,r; симметрия (q,r)→(−q,−r). */
 const SECTORS=[
   {c:[0,0],code:"Ц",n:"Аномалия",img:"vortex"},
@@ -464,7 +472,8 @@ const BINFO={
   base:{d:"Главное здание расы, 12 HP. Не двигается и не стреляет.",w:"Цель всей игры: разрушите базу врага — победа, потеряете свою — поражение."},
   mine:{d:"Приносит +150 ◆ в начале каждого вашего хода. Ставится только на кристалл, рядом с которым стоит ваш отряд и нет врагов.",w:"Единственный источник дохода. Больше шахт — больше отрядов и зданий. Максимум 4."},
   factory:{d:"Раз в ход, в фазе покупок, нанимает один отряд на свободный гекс рядом с собой.",w:"Без фабрики нельзя пополнить армию. Ставьте ближе к фронту. Максимум 2."},
-  tower:{d:"Раз в ход стреляет: атака 2, дальность 2. Не двигается.",w:"Дешёвая оборона базы и шахт от быстрых налётов. Максимум 4."}
+  tower:{d:"Раз в ход стреляет: атака 2, дальность 2. Не двигается.",w:"Дешёвая оборона базы и шахт от быстрых налётов. Максимум 4."},
+  silo:{d:`Только у Доргов. Заряжается ${BLD.silo.charge} хода, затем в фазе приказов бьёт ядерной ракетой в любой гекс поля: −${NUKE.c} HP в центре и −${NUKE.ring} HP на 6 соседних гексах, броня не спасает. Задевает и свои отряды. В центре на ${NUKE.fall} раунда остаётся радиация. После пуска перезарядка ${BLD.silo.reload} хода.`,w:"Осадное оружие: ломает скопления войск и главную базу издалека. Противник видит таймер и может снести шахту, пока она заряжается. Максимум 1."}
 };
 const TINFO={
   rock:{n:"Скала",g:"▲",d:"Непроходима. Закрывает атаку на дальность 2, если стоит между стрелком и целью. Строить нельзя.",w:"Естественная стена: за ней можно укрыться от стрелков."},
@@ -519,7 +528,9 @@ const pname=p=>`${RACES[race(p)].n}${race(0)===race(1)?" "+(p+1):""}`;
 const ename=e=>e.kind==="unit"?RACES[race(e.owner)].names[e.type]:BLD[e.type].n;
 const count=(p,t)=>S.ents.filter(e=>e.owner===p&&e.type===t).length;
 const mines=p=>count(p,"mine");
-const terr=(q,r)=>S&&S.terrain&&S.map?S.map[K(q,r)]||null:null;
+const terr=(q,r)=>S&&S.fall&&S.fall[K(q,r)]?"rad":S&&S.terrain&&S.map?S.map[K(q,r)]||null:null;
+const siloOk=p=>abOn()&&race(p)===BLD.silo.race;
+const nukeReady=e=>e&&e.type==="silo"&&!e.fresh&&!e.charge;
 const roadE=(a,b)=>!!(S&&S.roads&&S.roads.includes(a<b?a+"|"+b:b+"|"+a));
 const isRoad=(q,r)=>!!(S&&S.roads&&S.roads.some(e=>e.split("|").includes(K(q,r))));
 const armor=(e,src)=>e.kind==="unit"?CLS[e.type].arm+(terr(e.q,e.r)==="ruins"?1:0)+(src&&terr(e.q,e.r)==="forest"&&atkStats(src).rng>=2?1:0)
@@ -665,7 +676,7 @@ function aiGoalFor(u,G){
 }
 function aiTargetScore(u,t){
   const d=atkVal(u,t), kill=d>=maxHp(t)-t.dmg;
-  const val=t.type==="base"?40:t.kind==="unit"?CLS[t.type].cost/100+CLS[t.type].atk:t.type==="tower"?4:t.type==="factory"?3.5:t.type==="mine"?3:1;
+  const val=t.type==="base"?40:t.kind==="unit"?CLS[t.type].cost/100+CLS[t.type].atk:t.type==="tower"?4:t.type==="silo"?(t.charge<=1?7:5):t.type==="factory"?3.5:t.type==="mine"?3:1;
   return (kill?10+val*2:d*1.5+val*.5)+(t.type==="base"?4:0);
 }
 function aiBestTarget(u){let best=null;for(const id of targets(u)){const t=byId(id),s=aiTargetScore(u,t);if(!best||s>best.s)best={t,s}}return best}
@@ -718,6 +729,17 @@ function aiPickUnit(p,cr,G){
   }
   return opts[opts.length-1]||null;
 }
+function nukeArea(q,r){return S.ents.filter(e=>dist(e,{q,r})<=1).map(e=>({e,d:dist(e,{q,r})?NUKE.ring:NUKE.c}))}
+function aiNukeAt(p){ // лучший гекс для ядерного удара или null, если бить пока невыгодно
+  let best=null;
+  for(const {q,r} of CELLS.values()){let s=0;
+    for(const {e,d} of nukeArea(q,r)){const hp=maxHp(e)-e.dmg, kill=d>=hp;
+      const val=e.type==="base"?40:e.kind==="unit"?CLS[e.type].cost/100+CLS[e.type].atk:e.type==="silo"?6:e.type==="tower"?4:e.type==="factory"?3.5:e.type==="mine"?3:1;
+      const v=(kill?10+val*2:Math.min(d,hp)*1.5+val*.5)+(e.type==="base"&&kill?1000:0);
+      s+=e.owner===p?-v*1.3:v}
+    if(!best||s>best.s) best={q,r,s}}
+  return best&&best.s>=10?best:null;
+}
 async function aiBuy(p){
   const cr=()=>S.players[p].cr, G=aiGoals(p);
   const threats=()=>S.ents.filter(e=>e.owner!==p&&e.kind==="unit"&&dist(e,G.myBase)<=4);
@@ -729,6 +751,7 @@ async function aiBuy(p){
     if(cr()>=BLD.mine.cost&&place("mine",()=>0)) did=true;
     else if(!count(p,"factory")&&cr()>=BLD.factory.cost&&place("factory",toFoe)) did=true;
     else if(threats().length&&count(p,"tower")<2&&cr()>=BLD.tower.cost&&place("tower",([q,r])=>-Math.min(...threats().map(e=>dist(e,{q,r}))))) did=true;
+    else if(siloOk(p)&&S.round>=4&&cr()>=BLD.silo.cost+100&&place("silo",([q,r])=>-toFoe([q,r]))) did=true;
     else {
       const f=S.ents.find(e=>e.owner===p&&e.type==="factory"&&!e.fresh&&!e.hired);
       const cls=f&&aiPickUnit(p,cr(),G), cells=f?[...hireCells(f)]:[];
@@ -743,6 +766,8 @@ async function aiTurn(){
   if(S.phase==="orders"){
     for(const t of S.ents.filter(e=>e.owner===p&&e.type==="tower"&&canAct(e)&&!e.attacked)){
       const b=aiBestTarget(t); if(b){doAttack(t,b.t); await aiWait(700); if(S.winner) return}}
+    for(const s of S.ents.filter(e=>e.owner===p&&nukeReady(e))){
+      const n=aiNukeAt(p); if(n){doNuke(s,n.q,n.r); await aiWait(1400); if(S.winner) return}}
     const G=aiGoals(p);
     const units=S.ents.filter(e=>e.owner===p&&e.kind==="unit"&&canAct(e))
       .sort((a,b)=>(a.type==="scout")-(b.type==="scout")||(targets(b).length-targets(a).length)||dist(a,G.foeBase)-dist(b,G.foeBase));
@@ -780,6 +805,8 @@ function newGame(r0,r1,heavy,terrain,roads,bal,ai,abil){
 function startTurn(){
   const p=S.cur;
   S.ents.forEach(e=>{if(e.owner===p){e.moved=false;e.attacked=false;e.fresh=false;e.hired=false;e.ran=0;e.lock=null}});
+  S.ents.forEach(e=>{if(e.owner===p&&e.type==="silo"&&e.charge>0)e.charge--});
+  if(S.fall) for(const k in S.fall){const f=S.fall[k]; if(f.p===p&&S.round>=f.until) delete S.fall[k]}
   const inc=mines(p)*INCOME; S.players[p].cr+=inc; S.phase="orders";
   FX.push({t:"turn",p,inc});
   S.ents.filter(e=>e.owner===p&&e.type==="mine").forEach((e,i)=>FX.push({t:"float",at:px(e.q,e.r),txt:"+"+INCOME,cls:"inc",delay:900+i*140}));
@@ -817,6 +844,7 @@ function pathTo(u,goal){ // тот же поиск, что в reach, но с в�
   if(!seen.has(goal)) return null; const out=[]; let k=goal; while(k){out.push(k);k=prev.get(k)} return {path:out.reverse(),cost:seen.get(goal)/2};
 }
 function drawPath(k){const g=$("pathl"); if(!g) return; g.innerHTML="";
+  if(k&&ui.mode&&ui.mode.kind==="nuke"){const [q,r]=kq(k);[[q,r],...adj(q,r)].forEach(([a,b],i)=>{if(!cell(a,b))return;const [x,y]=px(a,b);mk("polygon",{class:"nka"+(i?"":" c"),points:hexPts(x,y,HS-2)},g)});return}
   const s=ui.sel&&byId(ui.sel); if(!k||!s||!canAct(s)||s.kind!=="unit"||s.moved||ui.mode) return;
   if(!reach(s).has(k)) return; const r=pathTo(s,k); if(!r) return;
   const pts=r.path.map(kk=>px(...kk.split(",").map(Number))), [ex,ey]=pts[pts.length-1], [bx,by]=pts[pts.length-2]||pts[0], a=Math.atan2(ey-by,ex-bx);
@@ -826,7 +854,7 @@ function drawPath(k){const g=$("pathl"); if(!g) return; g.innerHTML="";
 }
 function atkStats(e){return e.kind==="unit"?{atk:CLS[e.type].atk,rng:CLS[e.type].rng}:{atk:BLD.tower.atk,rng:BLD.tower.rng}}
 function targets(u){const {rng}=atkStats(u);return S.ents.filter(e=>e.owner!==u.owner&&dist(e,u)<=rng&&los(u,e)).map(e=>e.id)}
-function leftActs(e){if(e.owner!==S.cur||e.fresh||S.phase!=="orders"||S.winner)return null;if(e.kind==="unit")return {mv:!e.moved,at:!e.attacked};if(e.type==="tower")return {mv:null,at:!e.attacked};return null}
+function leftActs(e){if(e.owner!==S.cur||e.fresh||S.phase!=="orders"||S.winner)return null;if(e.kind==="unit")return {mv:!e.moved,at:!e.attacked};if(e.type==="tower")return {mv:null,at:!e.attacked};if(nukeReady(e)&&!e.attacked)return {mv:null,at:true};return null}
 function pending(){return S.ents.filter(e=>{const l=leftActs(e);return l&&(l.mv||l.at)})}
 function doPass(u){if(!myTurn())return notMine();snap();const left=u.kind==="unit"&&!u.moved&&!u.attacked?"пропускает приказы":"заканчивает приказы";u.moved=true;u.attacked=true;log(`${ename(u)} (${cn(u.q,u.r)}) ${left}.`);ui.sel=null;save();render();toast(S.log[0],"ok",true)}
 function canAct(e){return e.owner===S.cur&&!e.fresh&&!S.winner&&S.phase==="orders"&&(e.kind==="unit"||e.type==="tower")}
@@ -875,6 +903,15 @@ function abilFx(u,t,kill){
   if(has(u,"xar","giant")&&kill&&t.kind==="unit"&&u.dmg>0){const h=Math.min(2,u.dmg);u.dmg-=h;FX.push({t:"float",at:px(u.q,u.r),txt:"+"+h,cls:"inc",delay:600});out+=` Регенерация: +${h} HP.`}
   if(has(u,"vel","spec")&&!kill){t.mark=true;FX.push({t:"float",at:px(t.q,t.r),txt:"◎",cls:"inc",delay:600});out+=` Наводка: ${ename(t)} получит +1 урон от Веларов.`}
   return out}
+function doNuke(s,q,r){
+  snap(); s.charge=BLD.silo.reload; s.attacked=true;
+  FX.push({t:"nuke",o:s.owner,from:px(s.q,s.r),at:px(q,r)});
+  const hit=nukeArea(q,r); let out=[];
+  hit.forEach(({e,d})=>{const dead=hurt(e,d,s); out.push(`${ename(e)}${e.owner===s.owner?" (свой)":""} −${d}${dead?", уничтожен":""}`)});
+  if(!terr(q,r)||terr(q,r)==="rad"){S.fall=S.fall||{}; S.fall[K(q,r)]={p:s.owner,until:S.round+NUKE.fall}}
+  log(`☢ Ядерный удар Доргов по ${cn(q,r)}: ${out.length?out.join("; "):"никого не задело"}. Перезарядка ${BLD.silo.reload} хода.`);
+  ui.mode=null; after(s);
+}
 function after(u){
   toast(S.log[0],"ok",true);
   const still=u.kind==="unit"&&(!u.moved&&reach(u).size||!u.attacked&&targets(u).length);
@@ -883,7 +920,7 @@ function after(u){
 }
 function doBuild(type,q,r){
   snap(); const p=S.cur; S.players[p].cr-=BLD[type].cost;
-  S.ents.push({id:S.nid,owner:p,kind:"bld",type,q,r,dmg:0,moved:false,attacked:false,fresh:true,hired:false}); FX.push({t:"spawn",id:S.nid++,at:px(q,r)});
+  S.ents.push({id:S.nid,owner:p,kind:"bld",type,q,r,dmg:0,moved:false,attacked:false,fresh:true,hired:false,...(type==="silo"?{charge:BLD.silo.charge}:{})}); FX.push({t:"spawn",id:S.nid++,at:px(q,r)});
   if(type==="mine"&&S.stats.firstMine[p]===null) S.stats.firstMine[p]=S.round;
   log(`${pname(p)} строят: ${BLD[type].n}, ${cn(q,r)} (−${BLD[type].cost} ◆).`);
   ui.mode=null; save(); render(); toast(S.log[0],"ok",true);
@@ -899,6 +936,7 @@ function clickCell(q,r){
   if(!S||S.winner) return;
   if(!myTurn()){const e=at(q,r);ui.sel=e?e.id:null;ui.cell=e?null:[q,r];ui.mode=null;render();return}
   const k=K(q,r), e=at(q,r);
+  if(ui.mode&&ui.mode.kind==="nuke"){const sl=byId(ui.mode.sid); if(nukeReady(sl)&&!sl.attacked&&S.phase==="orders"){doNuke(sl,q,r);return} ui.mode=null}
   if(ui.mode){
     const cells=ui.mode.kind==="build"?placeCells(ui.mode.type):hireCells(byId(ui.mode.fid));
     if(cells.has(k)){ ui.mode.kind==="build"?doBuild(ui.mode.type,q,r):doHire(byId(ui.mode.fid),ui.mode.cls,q,r); return; }
@@ -926,6 +964,7 @@ function sfxFor(list){let mv=0;list.forEach(f=>{
   if(f.t==="spawn") sfx("build");
   if(f.t==="shot"){sfx(f.snd||"shot");if(f.kill)sfx("boom",f.snd&&f.snd!=="shot"?320:190)}
   if(f.t==="boom") sfx("boom");
+  if(f.t==="nuke"){sfx("shot");sfx("boom",420);sfx("boom",560)}
   if(f.t==="turn") sfx("turn",S&&S.winner?0:150)})}
 function sndUI(){const b=$("sndBtn");b.setAttribute("aria-pressed",sndOn);b.textContent=sndOn?"Звук: вкл":"Звук: выкл"}
 const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -994,6 +1033,7 @@ function playFX(){
       },190);
     }
     if(f.t==="boom") boom(L,f.at,pcol(f.o),false);
+    if(f.t==="nuke") nukeFx(L,f);
     if(f.t==="nope"){const [x,y]=f.at, h=mk("polygon",{points:hexPts(x,y,HS-2),fill:"rgba(255,178,63,.18)",stroke:"#ffb23f","stroke-width":2.5},L);
       h.animate([{transform:"translate(0,0)",opacity:1},{transform:"translate(-3px,0)"},{transform:"translate(3px,0)"},{transform:"translate(-2px,0)"},{transform:"translate(0,0)",opacity:1,offset:.5},{opacity:0}],{duration:650,fill:"forwards"}).onfinish=()=>h.remove()}
     if(f.t==="float") floatTxt(L,f.at,f.txt,f.cls==="inc"?"#8ff3ff":"#7dff8a",f.delay||0);
@@ -1022,6 +1062,22 @@ function boom(L,[x,y],c,big){
     p.animate([{transform:"translate(0,0)",opacity:1},{transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d}px)`,opacity:0}],{duration:600+Math.random()*300,easing:"cubic-bezier(.1,.7,.3,1)",fill:"forwards"}).onfinish=()=>p.remove()}
   ripple(L,[x,y],"#ffd27a",80);
   const b=$("board"); b.animate([{transform:"translate(0,0)"},{transform:"translate(3px,-2px)"},{transform:"translate(-3px,2px)"},{transform:"translate(0,0)"}],{duration:260})}
+function nukeFx(L,f){
+  const [x2,y2]=f.at, m=mk("g",{},L); mk("circle",{r:5,fill:"#ffd23f",filter:"url(#soft)"},m); mk("circle",{r:2.5,fill:"#fff"},m);
+  fly(L,f.from,f.at,m,420,0,Math.max(HS*3,Math.hypot(x2-f.from[0],y2-f.from[1])*.4));
+  setTimeout(()=>{
+    const R=HS*2.6, fl=mk("circle",{cx:x2,cy:y2,r:HS,fill:"#fff8e0"},L);
+    fl.animate([{r:HS*.4,opacity:1},{r:R,opacity:.85,offset:.35},{r:R*1.15,opacity:0}],{duration:900,easing:"ease-out",fill:"forwards"}).onfinish=()=>fl.remove();
+    const fb=mk("circle",{cx:x2,cy:y2,r:R*.6,fill:"#ff7a2f",filter:"url(#soft)"},L);
+    fb.animate([{opacity:.9,transform:"scale(.3)"},{opacity:.7,transform:"scale(1)",offset:.4},{opacity:0,transform:"scale(1.2)"}],{duration:1300,easing:"ease-out",fill:"forwards"}).onfinish=()=>fb.remove();
+    fb.style.transformBox="fill-box"; fb.style.transformOrigin="center";
+    [0,140,280].forEach(d=>{const r=mk("circle",{cx:x2,cy:y2,r:HS*.5,fill:"none",stroke:d?"#ffd23f":"#fff","stroke-width":4},L);
+      r.animate([{r:HS*.5,opacity:1,strokeWidth:5},{r:R*1.3,opacity:0,strokeWidth:.5}],{duration:900,delay:d,easing:"ease-out",fill:"both"}).onfinish=()=>r.remove()});
+    const cap=mk("ellipse",{cx:x2,cy:y2-HS*1.4,rx:HS*1.1,ry:HS*.6,fill:"#c9581f",opacity:0,filter:"url(#soft)"},L), st=mk("rect",{x:x2-HS*.25,y:y2-HS*1.3,width:HS*.5,height:HS*1.3,fill:"#a84a1c",opacity:0,filter:"url(#soft)"},L);
+    [cap,st].forEach(n=>n.animate([{opacity:0,transform:"translate(0,10px)"},{opacity:.85,transform:"translate(0,0)",offset:.3},{opacity:0,transform:"translate(0,-14px)"}],{duration:1600,delay:150,easing:"ease-out",fill:"both"}).onfinish=()=>n.remove());
+    for(let i=0;i<4;i++) debris(L,[x2+(Math.random()-.5)*HS*2,y2+(Math.random()-.5)*HS*2],true);
+    const b=$("board"); b.animate([{transform:"translate(0,0)"},{transform:"translate(6px,-4px)"},{transform:"translate(-6px,4px)"},{transform:"translate(4px,2px)"},{transform:"translate(0,0)"}],{duration:520});
+  },420)}
 function floatTxt(L,[x,y],txt,c,delay){const t=mk("text",{x,y:y-HS*.3,class:"dmgt",fill:c},L);t.textContent=txt;
   t.animate([{transform:"translate(0,6px)",opacity:0},{transform:"translate(0,-6px)",opacity:1,offset:.25},{transform:"translate(0,-30px)",opacity:0}],{duration:1100,delay,easing:"ease-out",fill:"both"}).onfinish=()=>t.remove()}
 function turnBanner(f){
@@ -1041,6 +1097,8 @@ function tipBody(i,title,sub,stats,tc,warn){
   return `<div class="tt">${title}</div>${sub?`<div class="ts">${sub}</div>`:""}${stats?`<div class="tst">${stats.map(([k,v])=>`<span><b>${k}</b>${v}</span>`).join("")}</div>`:""}<dl>${i.ab?`<dt>Способность</dt><dd>${i.ab}</dd>`:""}<dt>Что делает</dt><dd>${i.d}</dd>${i.w?`<dt>Зачем</dt><dd>${i.w}</dd>`:""}</dl>${warn?`<div class="warn">${warn}</div>`:""}`}
 function actPreview(q,r){
   const s=ui.sel&&byId(ui.sel), e=at(q,r), k=K(q,r);
+  if(ui.mode&&ui.mode.kind==="nuke"){const h=nukeArea(q,r), own=h.filter(x=>x.e.owner===S.cur).length, kills=h.filter(x=>x.d>=maxHp(x.e)-x.e.dmg).length;
+    return `<div class="act atk">☢ Ядерный удар сюда: ${h.length?`заденет ${h.length}${kills?`, уничтожит ${kills}`:""}`:"никого не заденет"}.${own?` Своих под ударом: ${own}!`:""}</div>`}
   if(ui.mode){const cells=ui.mode.kind==="build"?placeCells(ui.mode.type):hireCells(byId(ui.mode.fid));
     if(cells.has(k)) return `<div class="act">Поставить сюда</div>`; if(!(e&&e.owner===S.cur)) return `<div class="act no">${placeWhyNot(ui.mode,q,r)}</div>`; return ""}
   if(!s||S.phase!=="orders"||s.owner!==S.cur||!(s.kind==="unit"||s.type==="tower")||e===s) return "";
@@ -1056,7 +1114,7 @@ function tipForHex0(q,r){
   if(e){const hp=maxHp(e)-e.dmg;
     if(e.kind==="unit"){const c=CLS[e.type];
       return [tipBody(roleOf(race(e.owner),e.type),ename(e),`${c.n}, ${pname(e.owner)}`,[["HP",`${hp}/${hpOf(e.type)}`],["Атака",c.atk],["Дальность",c.rng],["Скорость",spdOf(e)],["Броня",armor(e)]],`var(--p${e.owner})`,e.fresh?"Новый: действует со следующего хода.":terr(q,r)==="ruins"?"Стоит в руинах: броня +1.":terr(q,r)==="rad"?"Стоит в радиации: получит 1 урон в конце хода.":terr(q,r)==="forest"?"Стоит в лесу: броня +1 против стрелков.":terr(q,r)==="sand"?"Стоит в песках: дальше двигаться в этот ход нельзя.":isRoad(q,r)?"Стоит на дороге: по дороге проходит вдвое дальше.":""),`var(--p${e.owner})`]}
-    const st=[["HP",`${hp}/${BLD[e.type].hp}`]].concat(e.type==="tower"?[["Атака",2],["Дальность",2]]:[]).concat(e.type==="mine"?[["Доход","+150 ◆"]]:[]);
+    const st=[["HP",`${hp}/${BLD[e.type].hp}`]].concat(e.type==="tower"?[["Атака",2],["Дальность",2]]:[]).concat(e.type==="mine"?[["Доход","+150 ◆"]]:[]).concat(e.type==="silo"?[["Заряд",e.fresh?"строится":e.charge?`через ${e.charge}`:"готова"]]:[]);
     return [tipBody(BINFO[e.type],BLD[e.type].n,pname(e.owner),st,"",e.fresh?"Новое: работает со следующего хода.":""),`var(--p${e.owner})`]}
   const i=hexInfo(q,r); return [tipBody(i,i.n,`Гекс ${cn(q,r)}`,null,"",""),i===DEP?"#6fe3ff":"var(--line)"]}
 function tipForKey(k){const [a,b]=k.split(":"), p=S.cur;
@@ -1118,7 +1176,7 @@ function render(){
   document.documentElement.style.setProperty("--cur",`var(--p${S.winner?S.winner-1:p})`);
   let mv=new Set(), tg=[], pl=new Set();
   if(s&&canAct(s)){ if(s.kind==="unit"&&!s.moved) mv=reach(s); if(!s.attacked) tg=targets(s); }
-  if(ui.mode) pl=ui.mode.kind==="build"?placeCells(ui.mode.type):hireCells(byId(ui.mode.fid));
+  if(ui.mode&&ui.mode.kind!=="nuke") pl=ui.mode.kind==="build"?placeCells(ui.mode.type):hireCells(byId(ui.mode.fid));
   const base=STATIC.base.replace(/data-sec="(\d)" href=""/g,(m,i)=>{const sc=SECTORS[+i];return `href="art/sec_${sc.img||race(sc.p)}.jpg"`});
   let grid="", marks="", ents="", hits="", hl="", pips="", road="";
   for(const c of CELLS.values()){
@@ -1154,8 +1212,9 @@ function render(){
       const la=leftActs(e);
       if(la){const pr=HS*.27, px0=x-HS*.66;
         if(la.mv!==null) pips+=`<g class="pip mvp${la.mv?"":" off"}"><circle cx="${px0}" cy="${y+HS*.06}" r="${pr}"/><text x="${px0}" y="${y+HS*.06}">${la.mv?"➜":"✓"}</text></g>`;
-        pips+=`<g class="pip atp${la.at?"":" off"}"><circle cx="${px0}" cy="${y+HS*.64}" r="${pr}"/><text x="${px0}" y="${y+HS*.64}">${la.at?"⚔":"✓"}</text></g>`;
+        pips+=`<g class="pip atp${la.at?"":" off"}"><circle cx="${px0}" cy="${y+HS*.64}" r="${pr}"/><text x="${px0}" y="${y+HS*.64}">${la.at?(e.type==="silo"?"☢":"⚔"):"✓"}</text></g>`;
         if(la.mv||la.at) ents+=e.kind==="unit"?`<circle class="rdy" cx="${x}" cy="${y}" r="${HS*.74+5}"/>`:`<polygon class="rdy" points="${hexPts(x,y,HS*.86+5)}"/>`;}
+      if(e.type==="silo"){const rd=nukeReady(e);ents+=`<g class="nkb${rd?" rd":""}"><rect x="${x-HS*.82}" y="${y-HS*.8}" width="${HS*.64}" height="${HS*.42}" rx="${HS*.2}"/><text x="${x-HS*.5}" y="${y-HS*.59}">${rd?"☢":"☢"+e.charge}</text></g>`}
       ents+=`<circle class="tagb" cx="${x+HS*.56}" cy="${y-HS*.5}" r="${HS*.27}"/><text class="tagt" x="${x+HS*.56}" y="${y-HS*.5}">${hp}</text>`;
       if(ratio<=.5&&!RM) for(let i=0;i<3;i++) ents+=`<circle class="smoke" cx="${x+(i-1)*6}" cy="${y-HS*.3}" r="${3+i}" style="animation-delay:${i*.8}s;transform-box:fill-box;transform-origin:center"/>`;
       if(e.dmg>0) ents+=`<rect x="${x-HS*.5}" y="${y+HS*.66}" width="${HS}" height="4" rx="2" fill="#05070f"/><rect x="${x-HS*.5}" y="${y+HS*.66}" width="${HS*ratio}" height="4" rx="2" class="${ratio<=.34?"hpl":ratio<=.67?"hpm":"hph"}"/>`;
@@ -1169,8 +1228,8 @@ function render(){
   $("board").innerHTML=`<svg viewBox="${VB.join(" ")}" xmlns="http://www.w3.org/2000/svg">${STATIC.defs}${base}<g>${grid}</g>${road?`<path class="road-o" d="${road}"/><path class="road" d="${road}"/><path class="road-c" d="${road}"/>`:""}${STATIC.frames}<g>${marks}</g><g>${hl}</g><g>${ents}</g><g style="pointer-events:none">${pips}</g><g class="fx" id="fxl"></g><g class="fx" id="pathl"></g><g>${hits}</g></svg>`;
   renderPanel(s,p);
   const mb=$("modebar");
-  if(ui.mode&&!S.winner){const nm=ui.mode.kind==="build"?BLD[ui.mode.type].n:RACES[race(p)].names[ui.mode.cls];
-    mb.innerHTML=`<span>Ставим: <b>${nm}</b>. Нажмите на жёлтый гекс.</span><button type="button" id="modeCancel">Отмена</button>`;mb.hidden=false;
+  if(ui.mode&&!S.winner){const nm=ui.mode.kind==="build"?BLD[ui.mode.type].n:ui.mode.kind==="hire"?RACES[race(p)].names[ui.mode.cls]:"";
+    mb.innerHTML=ui.mode.kind==="nuke"?`<span>☢ <b>Ядерный удар</b>. Нажмите на любой гекс: −${NUKE.c} в центре, −${NUKE.ring} вокруг.</span><button type="button" id="modeCancel">Отмена</button>`:`<span>Ставим: <b>${nm}</b>. Нажмите на жёлтый гекс.</span><button type="button" id="modeCancel">Отмена</button>`;mb.hidden=false;
     $("modeCancel").onclick=()=>{ui.mode=null;render()}} else mb.hidden=true;
   playFX(); aiKick();
 }
@@ -1208,15 +1267,17 @@ function renderInfo(s){
     const hp=maxHp(s)-s.dmg, isU=s.kind==="unit";
     const c=isU?CLS[s.type]:null;
     const stats=isU?[["HP",`${hp}/${hpOf(s.type)}`],["Атака",c.atk],["Дальность",c.rng],["Скорость",spdOf(s)],["Броня",armor(s)],["Цена",c.cost+" ◆"]]
-      :[["HP",`${hp}/${BLD[s.type].hp}`]].concat(s.type==="tower"?[["Атака",2],["Дальность",2]]:[]).concat(s.type==="mine"?[["Доход","+150 ◆"]]:[]).concat(BLD[s.type].cost?[["Цена",BLD[s.type].cost+" ◆"]]:[]);
+      :[["HP",`${hp}/${BLD[s.type].hp}`]].concat(s.type==="tower"?[["Атака",2],["Дальность",2]]:[]).concat(s.type==="mine"?[["Доход","+150 ◆"]]:[]).concat(s.type==="silo"?[["Заряд",s.fresh?"строится":s.charge?`через ${s.charge}`:"готова"]]:[]).concat(BLD[s.type].cost?[["Цена",BLD[s.type].cost+" ◆"]]:[]);
     let note="";
     if(s.owner===p&&!S.winner){
       if(isU&&S.phase==="orders") note=s.fresh?"Новый: действует со следующего хода.":(s.moved?"Движение сделано. ":"Зелёные гексы: куда можно пойти. ")+(s.attacked?"Атака сделана.":"Красная рамка: кого можно атаковать.");
       if(s.type==="tower"&&S.phase==="orders") note=s.fresh?"Новая: стреляет со следующего хода.":s.attacked?"Выстрел сделан.":"Выберите цель в красной рамке.";
+      if(s.type==="silo"&&S.phase==="orders") note=s.fresh?`Новая: заряд начнётся со следующего хода, пуск через ${s.charge} хода.`:s.attacked?"Ракета запущена в этот ход.":s.charge?`Заряжается: пуск через ${s.charge} ${s.charge===1?"ход":"хода"}.`:"Ракета готова. Нажмите «Ядерный удар» и выберите любой гекс.";
       if(s.type==="factory"&&S.phase==="buy") note=s.fresh?"Новая: нанимает со следующего хода.":s.hired?"В этот ход фабрика уже наняла отряд.":"Выберите отряд, затем жёлтый гекс рядом с фабрикой.";
     }
     const la=leftActs(s);
-    const stl=la?`<div class="passrow"><span class="stline">${la.mv===null?"":la.mv?"Движение: есть":"Движение: сделано"}${la.mv===null?"":" · "}${la.at?"Атака: есть":"Атака: сделана"}</span>${la.mv||la.at?`<button class="btn" id="passBtn" type="button">Пропустить</button>`:""}</div>`:"";
+    const nkb=la&&s.type==="silo"?`<button class="btn primary" id="nukeBtn" type="button" style="width:auto">☢ Ядерный удар</button>`:"";
+    const stl=la?`<div class="passrow">${nkb}<span class="stline">${la.mv===null?"":la.mv?"Движение: есть":"Движение: сделано"}${la.mv===null?"":" · "}${s.type==="silo"?"Пуск: готов":la.at?"Атака: есть":"Атака: сделана"}</span>${la.mv||la.at?`<button class="btn" id="passBtn" type="button">Пропустить</button>`:""}</div>`:"";
     h=`<div class="unitcard o${s.owner}"><img src="${art(race(s.owner),s.type,true)}" alt="${ename(s)}"><div><div class="nm">${ename(s)}</div><div class="cls">${isU?c.n:"Строение"}, ${pname(s.owner)}, гекс ${cn(s.q,s.r)}</div><div class="statgrid">${stats.map(([k,v])=>`<span class="st"><small>${k}</small>${v}</span>`).join("")}</div>${note?`<p class="hint" style="margin:8px 0 0">${note}</p>`:""}${stl}</div></div>${whyBlk(isU?roleOf(race(s.owner),s.type):BINFO[s.type])}`;
     if(s.owner===p&&s.type==="factory"&&S.phase==="buy"&&!s.fresh&&!s.hired&&!S.winner){
       const g=document.createElement("div"); g.className="shop";
@@ -1235,7 +1296,7 @@ function renderInfo(s){
   if(S.phase==="buy"&&!S.winner&&!(s&&s.type==="factory"&&s.owner===p)){
     h+=`<p class="hint" style="margin:${s||ui.cell?"10px":"0"} 0 0">Покупки. Постройте здание или наймите отряд.${ui.mode?" Жёлтые гексы: куда можно поставить.":""}</p>`;
     const g=document.createElement("div"); g.className="shop"; g.style.marginTop="8px";
-    ["mine","factory","tower"].forEach(t=>{const B=BLD[t];
+    ["mine","factory","tower"].concat(siloOk(p)?["silo"]:[]).forEach(t=>{const B=BLD[t];
       g.appendChild(tile(art(race(p),t),B.n,B.cost,`${count(p,t)} из ${B.limit}`,!placeCells(t).size,ui.mode&&ui.mode.type===t,()=>{ui.mode={kind:"build",type:t};ui.sel=null;ui.cell=null;render()},"b:"+t))});
     shop.appendChild(g);
     const fs=S.ents.filter(e=>e.owner===p&&e.type==="factory"), ready=fs.filter(f=>!f.fresh&&!f.hired);
@@ -1252,6 +1313,7 @@ function renderInfo(s){
   }
   info.innerHTML=h;
   const pb=$("passBtn"); if(pb) pb.onclick=()=>doPass(s);
+  const nb=$("nukeBtn"); if(nb) nb.onclick=()=>{if(!myTurn())return notMine();ui.mode={kind:"nuke",sid:s.id};render()};
   info.querySelectorAll("[data-sel]").forEach(b=>b.onclick=()=>{ui.sel=+b.dataset.sel;ui.cell=null;render()});
 }
 
