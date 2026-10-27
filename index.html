@@ -317,20 +317,21 @@ body{
  radial-gradient(1200px 700px at 20% -10%,#1a1440 0%,transparent 60%),
  radial-gradient(900px 600px at 110% 20%,#0d2a3f 0%,transparent 55%),var(--bg);
 }
-.boardwrap{isolation:isolate;border-radius:20px;transition:filter .25s ease}
+.boardwrap{isolation:isolate}
 .boardwrap::before{content:"";position:absolute;inset:5% 3%;z-index:-1;pointer-events:none;
  background:radial-gradient(ellipse at 50% 48%,rgba(63,112,205,.19),rgba(31,49,101,.08) 42%,transparent 72%);
  filter:blur(28px)}
-.board svg{filter:drop-shadow(0 24px 24px rgba(0,0,0,.7)) drop-shadow(0 0 26px rgba(91,137,245,.13))}
-.board .grid{stroke:rgba(224,236,255,.29);stroke-width:.95;transition:filter .16s,stroke .16s}
+.board svg{filter:drop-shadow(0 24px 24px rgba(0,0,0,.7))} /* одна тень: синее свечение даёт .boardwrap::before */
+.board .grid{stroke:rgba(224,236,255,.29);stroke-width:.95}
 .board .hit:hover{fill:rgba(151,208,255,.13);stroke:rgba(214,237,255,.65);stroke-width:1.3}
-.board .selc{stroke:#f8f1d4;stroke-width:3;filter:drop-shadow(0 0 6px rgba(255,231,151,.75))}
-.board .mv{fill:rgba(62,207,142,.25);stroke:#83ffcb;filter:drop-shadow(0 0 4px rgba(62,207,142,.5))}
-.board .at{fill:rgba(255,77,106,.19);stroke:#ff6d84;filter:drop-shadow(0 0 6px rgba(255,77,106,.5))}
-.board .pl{fill:rgba(242,207,74,.24);stroke:#ffe08d;filter:drop-shadow(0 0 5px rgba(242,207,74,.5))}
+.board .selc{stroke:#fff;stroke-width:3.6;stroke-linejoin:round;filter:drop-shadow(0 0 3px var(--cur)) drop-shadow(0 0 8px var(--cur))}
+/* выбранный отряд: белое кольцо со свечением цвета игрока поверх арта (гекс выделения закрыт отрядом) */
+.board .ent.sel .ring{stroke:#fff;stroke-width:3.6;filter:drop-shadow(0 0 3px var(--pc)) drop-shadow(0 0 8px var(--pc))}
+@media (prefers-reduced-motion:no-preference){.board .selc,.board .ent.sel .ring{animation:selp 1.4s ease-in-out infinite}@keyframes selp{50%{stroke-width:2.4}}}
+.board .mv{fill:rgba(62,207,142,.25);stroke:#83ffcb}
+.board .at{fill:rgba(255,77,106,.22);stroke:#ff6d84}
+.board .pl{fill:rgba(242,207,74,.24);stroke:#ffe08d}
 .board .ent image{filter:drop-shadow(0 4px 4px rgba(0,0,0,.78))}
-.board .ent.done image{filter:grayscale(.85) brightness(.55)}
-.card,.actionbar,.netbar,.legend{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .card{border-color:rgba(153,181,242,.2);background:linear-gradient(160deg,rgba(27,37,68,.94),rgba(11,17,33,.95));box-shadow:inset 0 1px rgba(255,255,255,.06),0 18px 36px -26px #000}
 .banner{border-color:color-mix(in srgb,var(--cur) 28%,var(--line-soft));box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 14px 30px -20px #000}
 .banner::before{background:linear-gradient(90deg,rgba(7,10,20,.95) 17%,rgba(7,10,20,.64) 63%,rgba(7,10,20,.18))}
@@ -346,7 +347,7 @@ button.btn.primary{box-shadow:0 8px 25px -15px var(--cur);transition:filter .18s
 button.btn.primary:hover:not(:disabled){filter:brightness(1.1);transform:translateY(-1px)}
 .tip{border-color:rgba(175,194,244,.25);box-shadow:0 18px 46px rgba(0,0,0,.7),0 0 30px -22px var(--tc,var(--crystal))}
 @media(max-width:920px){.boardwrap{max-width:720px}.main{gap:14px}}
-@media(prefers-reduced-motion:reduce){.boardwrap,.board .grid,.tile,button.btn.primary{transition:none!important}}
+@media(prefers-reduced-motion:reduce){.tile,button.btn.primary{transition:none!important}}
 
 </style>
 
@@ -1137,7 +1138,7 @@ function render(){
     if((s&&e===s)||(ui.cell&&ui.cell[0]===c.q&&ui.cell[1]===c.r)) hl+=`<polygon class="selc" points="${hexPts(x,y,HS-2)}"/>`;
     if(e){
       const spent=e.owner===S.cur&&S.phase==="orders"&&!e.fresh&&(e.kind==="unit"?(e.moved&&e.attacked):(e.type==="tower"&&e.attacked));
-      const cls=`ent o${e.owner}${e.fresh?" fresh":""}${spent?" done":""}`;
+      const cls=`ent o${e.owner}${e.fresh?" fresh":""}${spent?" done":""}${s&&e===s?" sel":""}`;
       const hp=maxHp(e)-e.dmg, ratio=hp/maxHp(e);
       if(e.kind==="unit"){const R=HS*.74;
         ents+=`<g class="${cls}" data-id="${e.id}"><ellipse class="shadow" cx="${x+3}" cy="${y+R*.55}" rx="${R*.95}" ry="${R*.42}"/><circle class="base" cx="${x}" cy="${y}" r="${R+3}"/><circle class="halo" cx="${x}" cy="${y}" r="${R+2.5}"/><image href="${art(race(e.owner),e.type)}" x="${x-R}" y="${y-R}" width="${2*R}" height="${2*R}" clip-path="url(#circ)"/><circle class="ring" cx="${x}" cy="${y}" r="${R}"/>`;
