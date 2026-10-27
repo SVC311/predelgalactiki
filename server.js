@@ -2,13 +2,16 @@
 // Раздаёт статику и хранит комнаты. Ходы передаются целым состоянием партии с номером версии.
 "use strict";
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
+const logstats = require("./logstats");
 
 const PORT = +process.env.PORT || 8080;
 const ROOT = __dirname;
 const DATA = process.env.DATA_DIR || path.join(ROOT, "data");
 const TTL = 7 * 24 * 3600 * 1000; // комната живёт неделю без активности
 const MAX_BODY = 512 * 1024;
-fs.mkdirSync(DATA, { recursive: true });
+const LOGS = path.join(DATA, "logs"); // журнал партий: по файлу на партию
+const LOGS_KEY = process.env.LOGS_KEY || ""; // если задан, /logs открывается только с ?key=…
+fs.mkdirSync(LOGS, { recursive: true });
 
 const rooms = new Map(); // code → {code, ver, state, fx, seats:[token|null, token|null], names, touched}
 const waiters = new Map(); // code → Set of {res, timer}
@@ -84,6 +87,37 @@ async function api(req, res, parts) {
   send(res, 404, { error: "Неизвестный запрос" });
 }
 
+// POST /api/log  → записать журнал партии (каждый ход присылается целиком, последний побеждает)
+// GET  /logs      → сводка, GET /logs/all.jsonl → все партии одним файлом
+const RACES = ["dorg", "xar", "vel"], MODES = ["local", "ai", "net"];
+async function saveLog(req, res) {
+  const b = await body(req);
+  if (typeof b.gid !== "string" || !/^[a-z0-9]{8,40}$/.test(b.gid)) return send(res, 400, { error: "Плохой журнал" });
+  if (!Array.isArray(b.races) || b.races.length !== 2 || !b.races.every(r => RACES.includes(r))) return send(res, 400, { error: "Плохой журнал" });
+  const f = path.join(LOGS, b.gid + ".json"), now = Date.now();
+  let old = null; try { old = JSON.parse(fs.readFileSync(f, "utf8")); } catch {}
+  const started = old ? old.started : now;
+  const rec = {
+    gid: b.gid, lv: +b.lv || 1, mode: MODES.includes(b.mode) ? b.mode : "local", races: b.races,
+    first: b.first === 1 ? 1 : 0, ai: b.ai === 0 || b.ai === 1 ? b.ai : null, opts: b.opts && typeof b.opts === "object" ? b.opts : {},
+    round: +b.round || 0, winner: b.winner === 0 || b.winner === 1 ? b.winner : null, stats: b.stats || {},
+    started, updated: now, minutes: Math.round((now - started) / 6000) / 10, ev: Array.isArray(b.ev) ? b.ev.slice(0, 5000) : [],
+  };
+  fs.writeFile(f, JSON.stringify(rec), () => {});
+  send(res, 200, { ok: true });
+}
+function showLogs(req, res, u, parts) {
+  if (LOGS_KEY && u.searchParams.get("key") !== LOGS_KEY) { res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Нужен ключ: /logs?key=…"); }
+  const games = logstats.readDir(LOGS), q = LOGS_KEY ? "?key=" + encodeURIComponent(LOGS_KEY) : "";
+  if (parts[1] === "all.jsonl") {
+    res.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="predely-logs-${new Date().toISOString().slice(0, 10)}.jsonl"` });
+    return res.end(games.map(g => JSON.stringify(g)).join("\n") + (games.length ? "\n" : ""));
+  }
+  if (parts[1] === "summary.json") return send(res, 200, logstats.summary(games));
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(logstats.html(logstats.summary(games), "/logs/all.jsonl" + q));
+}
+
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".png": "image/png", ".mp3": "audio/mpeg", ".json": "application/json", ".svg": "image/svg+xml", ".ico": "image/x-icon" };
 function stat(req, res, p) {
   if (p === "/") p = "/index.html";
@@ -100,6 +134,8 @@ function stat(req, res, p) {
 http.createServer((req, res) => {
   const u = new URL(req.url, "http://x"), parts = u.pathname.split("/").filter(Boolean);
   if (parts[0] === "api" && parts[1] === "room") return api(req, res, parts).catch(() => send(res, 400, { error: "Плохой запрос" }));
+  if (parts[0] === "api" && parts[1] === "log" && req.method === "POST") return saveLog(req, res).catch(() => send(res, 400, { error: "Плохой запрос" }));
+  if (parts[0] === "logs" && req.method === "GET") return showLogs(req, res, u, parts);
   if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
   stat(req, res, u.pathname);
 }).listen(PORT, () => console.log(`Пределы Галактики: http://localhost:${PORT}`));

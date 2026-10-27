@@ -759,6 +759,15 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null}catch(e){return null}}
 function snap(){hist.push(JSON.stringify(S));if(hist.length>60)hist.shift()}
 function log(t){S.log.unshift(t);if(S.log.length>80)S.log.pop()}
+// журнал для анализа: короткие записи в S.ev (откатываются вместе с «Отменить»), на сервер уходят в конце каждого хода
+function ev(o){if(!S||!S.gid)return;const L=S.ev||(S.ev=[]);if(L.length<3000)L.push({r:S.round,p:S.cur,...o})}
+const baseHp=p=>{const b=S.ents.find(e=>e.owner===p&&e.type==="base");return b?maxHp(b)-b.dmg:0};
+function sendLog(){if(!S||!S.gid||!/^https?:$/.test(location.protocol))return;
+  const rec={gid:S.gid,lv:1,mode:NET.on?"net":S.ai!=null?"ai":"local",races:[race(0),race(1)],first:S.first,ai:S.ai,
+    opts:{heavy:!!S.heavy,terrain:!!S.terrain,roads:!!(S.roads&&S.roads.length),abil:!!S.abil,bal:BALK.filter(bal)},
+    round:S.round,winner:S.winner?S.winner-1:null,stats:S.stats,ev:S.ev||[]};
+  const body=JSON.stringify(rec);
+  fetch("api/log",{method:"POST",headers:{"Content-Type":"application/json"},body,keepalive:body.length<60000}).catch(()=>{})}
 function colors(){
   if(!S) return; const r0=race(0), r1=race(1), st=document.documentElement.style;
   st.setProperty("--p0",RACES[r0].c); st.setProperty("--p1",r0===r1?RACES[r1].alt:RACES[r1].c);
@@ -766,7 +775,7 @@ function colors(){
 
 function newGame(r0,r1,heavy,terrain,roads,bal,ai,abil){
   S={players:[{race:r0,cr:500},{race:r1,cr:500}],cur:0,first:0,phase:"orders",round:1,heavy,terrain,nid:1,ents:[],log:[],winner:null,
-     stats:{firstMine:[null,null],mines5:[null,null]}};
+     stats:{firstMine:[null,null],mines5:[null,null]},gid:Date.now().toString(36)+Math.random().toString(36).slice(2,10),ev:[]};
   S.ai=ai??null; S.abil=!!abil; S.bal=bal||{}; S.map=terrain?genMap():{}; S.roads=roads?genRoads(S.map):[];
   const add=(o,kind,type,q,r)=>S.ents.push({id:S.nid++,owner:o,kind,type,q,r,dmg:0,moved:false,attacked:false,fresh:false,hired:false});
   add(0,"bld","base",-5,2); add(0,"bld","mine",-6,2); add(0,"unit","scout",-4,2); add(0,"unit","fighter",-4,1); add(0,"unit","spec",-5,3);
@@ -784,6 +793,7 @@ function startTurn(){
   FX.push({t:"turn",p,inc});
   S.ents.filter(e=>e.owner===p&&e.type==="mine").forEach((e,i)=>FX.push({t:"float",at:px(e.q,e.r),txt:"+"+INCOME,cls:"inc",delay:900+i*140}));
   log(`Раунд ${S.round}. Ходят ${pname(p)}. Доход +${inc} (шахт: ${mines(p)}).`);
+  ev({a:"turn",cr:S.players[p].cr,inc,mines:mines(p),fac:count(p,"factory"),tow:count(p,"tower"),units:S.ents.filter(e=>e.owner===p&&e.kind==="unit").map(e=>e.type),base:baseHp(p)});
 }
 
 function endTurn(){
@@ -792,10 +802,10 @@ function endTurn(){
   S.ents.filter(e=>e.owner===S.cur&&e.kind==="unit"&&terr(e.q,e.r)==="rad").forEach(e=>{
     e.dmg++; const dead=e.dmg>=maxHp(e); if(dead) S.ents=S.ents.filter(o=>o!==e);
     FX.push({t:"float",at:px(e.q,e.r),txt:"−1",cls:"rad"}); if(dead) FX.push({t:"boom",at:px(e.q,e.r),o:e.owner});
-    log(`Радиация: ${ename(e)} на ${cn(e.q,e.r)} получает 1 урон${dead?" и гибнет":""}.`)});
+    ev({a:"rad",u:e.type,kill:dead}); log(`Радиация: ${ename(e)} на ${cn(e.q,e.r)} получает 1 урон${dead?" и гибнет":""}.`)});
   S.ents.forEach(e=>{delete e.mark});
   S.cur=1-S.cur; if(S.cur===S.first) S.round++;
-  ui={sel:null,mode:null,cell:null}; startTurn(); save(); render();
+  ui={sel:null,mode:null,cell:null}; startTurn(); save(); render(); sendLog();
 }
 
 function stepCost(x,y,a,b){const t=terr(a,b);if(t==="forest")return 4;return roadE(K(x,y),K(a,b))?1:2} // в полушагах
@@ -828,7 +838,7 @@ function atkStats(e){return e.kind==="unit"?{atk:CLS[e.type].atk,rng:CLS[e.type]
 function targets(u){const {rng}=atkStats(u);return S.ents.filter(e=>e.owner!==u.owner&&dist(e,u)<=rng&&los(u,e)).map(e=>e.id)}
 function leftActs(e){if(e.owner!==S.cur||e.fresh||S.phase!=="orders"||S.winner)return null;if(e.kind==="unit")return {mv:!e.moved,at:!e.attacked};if(e.type==="tower")return {mv:null,at:!e.attacked};return null}
 function pending(){return S.ents.filter(e=>{const l=leftActs(e);return l&&(l.mv||l.at)})}
-function doPass(u){if(!myTurn())return notMine();snap();const left=u.kind==="unit"&&!u.moved&&!u.attacked?"пропускает приказы":"заканчивает приказы";u.moved=true;u.attacked=true;log(`${ename(u)} (${cn(u.q,u.r)}) ${left}.`);ui.sel=null;save();render();toast(S.log[0],"ok",true)}
+function doPass(u){if(!myTurn())return notMine();snap();const left=u.kind==="unit"&&!u.moved&&!u.attacked?"пропускает приказы":"заканчивает приказы";u.moved=true;u.attacked=true;ev({a:"pass",u:u.type});log(`${ename(u)} (${cn(u.q,u.r)}) ${left}.`);ui.sel=null;save();render();toast(S.log[0],"ok",true)}
 function canAct(e){return e.owner===S.cur&&!e.fresh&&!S.winner&&S.phase==="orders"&&(e.kind==="unit"||e.type==="tower")}
 
 function controlled(p,q,r){
@@ -850,11 +860,11 @@ function placeCells(type){
 }
 function hireCells(f){const s=new Set();adj(f.q,f.r).forEach(([a,b])=>{const t=terr(a,b);if(!at(a,b)&&t!=="rock"&&t!=="water")s.add(K(a,b))});return s}
 
-function doMove(u,q,r){snap();log(`${ename(u)}: ${cn(u.q,u.r)} → ${cn(q,r)}.`);FX.push({t:"move",id:u.id,from:px(u.q,u.r),to:px(q,r)});u.ran=dist(u,{q,r});u.q=q;u.r=r;u.moved=true;if(u.type==="spec"&&bal("still")&&!u.attacked){u.attacked=true;u.lock="moved"}after(u)}
+function doMove(u,q,r){snap();ev({a:"mv",u:u.type,from:cn(u.q,u.r),to:cn(q,r)});log(`${ename(u)}: ${cn(u.q,u.r)} → ${cn(q,r)}.`);FX.push({t:"move",id:u.id,from:px(u.q,u.r),to:px(q,r)});u.ran=dist(u,{q,r});u.q=q;u.r=r;u.moved=true;if(u.type==="spec"&&bal("still")&&!u.attacked){u.attacked=true;u.lock="moved"}after(u)}
 function doAttack(u,t){
   snap(); const dmg=atkVal(u,t); t.dmg+=dmg; u.attacked=true; if(u.kind==="bld") u.moved=true; if(u.type==="spec"&&bal("still")&&!u.moved){u.moved=true;u.lock="shot"}
   let msg=`${ename(u)} → ${ename(t)} (${cn(t.q,t.r)}): −${dmg} HP.`;
-  const kill=t.dmg>=maxHp(t); FX.push({t:"shot",ra:u.kind==="unit"?race(u.owner):null,mel:u.kind==="unit"&&CLS[u.type].rng===1,snd:u.kind==="unit"?`atk_${race(u.owner)}_${u.type}`:"shot",id:u.id,tid:t.id,o:u.owner,from:px(u.q,u.r),to:px(t.q,t.r),dmg,kill,big:t.kind==="bld"});
+  const kill=t.dmg>=maxHp(t); ev({a:"atk",u:u.type,t:t.type,dmg,kill}); FX.push({t:"shot",ra:u.kind==="unit"?race(u.owner):null,mel:u.kind==="unit"&&CLS[u.type].rng===1,snd:u.kind==="unit"?`atk_${race(u.owner)}_${u.type}`:"shot",id:u.id,tid:t.id,o:u.owner,from:px(u.q,u.r),to:px(t.q,t.r),dmg,kill,big:t.kind==="bld"});
   if(kill){ S.ents=S.ents.filter(e=>e!==t); msg+=" Цель уничтожена."; if(t.type==="base"){S.winner=u.owner+1; S.stats.rounds=S.round} }
   else msg+=` Осталось ${maxHp(t)-t.dmg} HP.`;
   if(u.kind==="unit") u.firstHit=true;
@@ -862,7 +872,7 @@ function doAttack(u,t){
   log(msg); after(u);
 }
 function hurt(e,n,by){ // урон от способности, без брони
-  e.dmg+=n; const dead=e.dmg>=maxHp(e);
+  e.dmg+=n; const dead=e.dmg>=maxHp(e); ev({a:"abil",u:by.type,t:e.type,dmg:n,kill:dead});
   FX.push({t:"float",at:px(e.q,e.r),txt:"−"+n,cls:"rad",delay:550});
   if(dead){S.ents=S.ents.filter(o=>o!==e);FX.push({t:"boom",at:px(e.q,e.r),o:e.owner,big:e.kind==="bld"});if(e.type==="base"){S.winner=by.owner+1;S.stats.rounds=S.round}}
   return dead}
@@ -879,17 +889,19 @@ function after(u){
   toast(S.log[0],"ok",true);
   const still=u.kind==="unit"&&(!u.moved&&reach(u).size||!u.attacked&&targets(u).length);
   ui.sel=still&&!S.winner?u.id:null; ui.mode=null; save(); render();
-  if(S.winner) showWin();
+  if(S.winner){ev({a:"win",w:S.winner-1});sendLog();showWin()}
 }
 function doBuild(type,q,r){
   snap(); const p=S.cur; S.players[p].cr-=BLD[type].cost;
   S.ents.push({id:S.nid,owner:p,kind:"bld",type,q,r,dmg:0,moved:false,attacked:false,fresh:true,hired:false}); FX.push({t:"spawn",id:S.nid++,at:px(q,r)});
+  ev({a:"build",t:type,at:cn(q,r)});
   if(type==="mine"&&S.stats.firstMine[p]===null) S.stats.firstMine[p]=S.round;
   log(`${pname(p)} строят: ${BLD[type].n}, ${cn(q,r)} (−${BLD[type].cost} ◆).`);
   ui.mode=null; save(); render(); toast(S.log[0],"ok",true);
 }
 function doHire(f,cls,q,r){
   snap(); const p=S.cur; S.players[p].cr-=CLS[cls].cost; f.hired=true;
+  ev({a:"hire",t:cls,at:cn(q,r)});
   S.ents.push({id:S.nid,owner:p,kind:"unit",type:cls,q,r,dmg:0,moved:false,attacked:false,fresh:true,hired:false}); FX.push({t:"spawn",id:S.nid++,at:px(q,r)});
   log(`${pname(p)} нанимают: ${RACES[race(p)].names[cls]}, ${cn(q,r)} (−${CLS[cls].cost} ◆).`);
   ui.mode=null; ui.sel=null; save(); render(); toast(S.log[0],"ok",true);
