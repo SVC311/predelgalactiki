@@ -375,8 +375,8 @@ h1{letter-spacing:.01em}
     <label class="chk"><input type="checkbox" id="b_still"> 1. «Стоял или стрелял»: специалист за ход либо двигается, либо стреляет</label>
     <label class="chk"><input type="checkbox" id="b_close"> 2. Слаб в упор: если рядом враг, специалист наносит на 1 меньше</label>
     <label class="chk"><input type="checkbox" id="b_hp2"> 3. У специалиста 2 HP вместо 3</label>
-    <label class="chk"><input type="checkbox" id="b_charge"> 4. Рывок: отряд ближнего боя, прошедший за ход 2+ гекса, бьёт на +1</label>
-    <label class="chk"><input type="checkbox" id="b_block"> 5. Линия огня: любой отряд между стрелком и целью закрывает выстрел</label>
+    <label class="chk"><input type="checkbox" id="b_charge" checked> 4. Рывок: отряд ближнего боя, прошедший за ход 2+ гекса, бьёт на +1</label>
+    <label class="chk"><input type="checkbox" id="b_block" checked> 5. Линия огня: любой отряд между стрелком и целью закрывает выстрел</label>
     </fieldset>
     <p class="hint" style="margin:0">Первого игрока выберет жребий. В базовой игре расы различаются только обликом и названиями.</p>
     <div class="row"><button class="btn primary" id="startBtn" type="button" style="width:auto">Начать партию</button><button class="btn" id="cancelSetup" type="button">Отмена</button></div>
@@ -1294,7 +1294,7 @@ function drawPick(){
 }
 let setupAI=false;
 function openSetup(online,ai){ NET.setupOnline=!!online; setupAI=!online&&!!ai; $("setupTitle").textContent=online?"Новая партия по сети":setupAI?"Новая партия против ИИ":"Новая партия";
-  $("lbl0").textContent=(setupAI?"Вы":"Игрок 1")+" · сектор слева внизу"; $("lbl1").textContent=(setupAI?"ИИ":"Игрок 2")+" · сектор справа вверху"; $("startBtn").textContent=online?"Создать и получить ссылку":"Начать партию"; if(S) {pick=[race(0),race(1)];BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
+  $("lbl0").textContent=(setupAI?"Вы":"Игрок 1")+" · сектор слева внизу"; $("lbl1").textContent=(setupAI?"ИИ":"Игрок 2")+" · сектор справа вверху"; $("startBtn").textContent=online?"Создать и получить ссылку":"Начать партию"; if(S) {pick=[race(0),race(1)];if(bal("d2"))BALK.forEach(k=>$("b_"+k).checked=bal(k))} drawPick(); $("cancelSetup").hidden=!S; openDlg("setup","startBtn"); }
 
 $("board").addEventListener("click",ev=>{const h=ev.target.closest(".hit");if(!h)return;const [q,r]=h.dataset.k.split(",").map(Number);clickCell(q,r)});
 const ARROW={ArrowRight:[[1,0]],ArrowLeft:[[-1,0]],ArrowUp:[[0,-1],[1,-1]],ArrowDown:[[0,1],[-1,1]]};
@@ -1304,7 +1304,7 @@ $("board").addEventListener("keydown",ev=>{
     const nk=ARROW[ev.key].map(([a,b])=>K(q+a,r+b)).find(x=>CELLS.has(x)); if(!nk)return;
     const n=$("board").querySelector(`.hit[data-k="${nk}"]`); if(n){h.setAttribute("tabindex","-1");n.setAttribute("tabindex","0");focusK=nk;n.focus()} return}
   if(ev.key!=="Enter"&&ev.key!==" ")return;const h=ev.target.closest(".hit");if(!h)return;ev.preventDefault();const k=h.dataset.k;const [q,r]=k.split(",").map(Number);clickCell(q,r);const n=$("board").querySelector(`.hit[data-k="${k}"]`);if(n)n.focus()});
-$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])),setupAI?1:null,$("abilChk").checked);if(online)netCreate()};
+$("startBtn").onclick=()=>{$("setup").hidden=true;$("winDlg").hidden=true;const online=NET.setupOnline;NET.setupOnline=false;if(NET.on){NET.on=false;netStore();history.replaceState(null,"",location.pathname);netBar()}newGame(pick[0],pick[1],$("heavyChk").checked,$("terrChk").checked,$("roadChk").checked,{...Object.fromEntries(BALK.map(k=>[k,$("b_"+k).checked])),d2:true},setupAI?1:null,$("abilChk").checked);if(online)netCreate()};
 $("cancelSetup").onclick=()=>closeDlg("setup");
 $("zoomBtn").onclick=()=>{const w=$("boardwrap"), on=!w.classList.contains("zoom"); w.classList.toggle("zoom",on); $("zoomBtn").setAttribute("aria-pressed",on); $("zoomBtn").textContent=on?"Уменьшить поле":"Увеличить поле";
   if(on){const b=S&&S.ents.find(e=>e.owner===S.cur&&e.type==="base"); requestAnimationFrame(()=>{const fr=b?(px(b.q,b.r)[0]-VB[0])/VB[2]:.5; w.scrollLeft=w.scrollWidth*fr-w.clientWidth/2})}};
