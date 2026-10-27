@@ -36,9 +36,24 @@ bash /opt/predelgalactiki/deploy/install.sh
 
 ## Обновление игры
 
+Обновлять вручную не нужно. Скрипт установки включает автообновление: раз в минуту сервер проверяет ветку `main` на GitHub и, если там новые коммиты, подтягивает их и перезапускает игру. Начатые онлайн-партии при этом сохраняются.
+
+Если сервер ставили до появления автообновления, включите его один раз:
+
 ```
-cd /opt/predelgalactiki && git pull && systemctl restart predely
+cd /opt/predelgalactiki && git pull && bash deploy/install.sh
 ```
+
+Проверить, что автообновление работает:
+
+```
+systemctl list-timers predely-update.timer
+journalctl -u predely-update -n 20 --no-pager
+```
+
+Автообновление пользуется тем же токеном GitHub, что и `git clone`. Когда срок токена закончится, обновления остановятся. Тогда создайте новый токен и выполните `git -C /opt/predelgalactiki remote set-url origin https://НОВЫЙ_ТОКЕН@github.com/SVC311/predelgalactiki.git`.
+
+Выключить автообновление: `systemctl disable --now predely-update.timer`.
 
 ## Необязательно: домен и HTTPS через nginx
 

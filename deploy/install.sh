@@ -25,6 +25,12 @@ systemctl daemon-reload
 systemctl enable predely >/dev/null 2>&1
 systemctl restart predely
 
+# автообновление из GitHub раз в минуту
+cp "$DIR/deploy/predely-update.service" "$DIR/deploy/predely-update.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now predely-update.timer >/dev/null 2>&1
+echo "== Автообновление включено: сервер сам подтягивает изменения из main раз в минуту"
+
 # открыть порт 80
 if command -v ufw >/dev/null && ufw status | grep -q active; then ufw allow 80/tcp; fi
 if command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then

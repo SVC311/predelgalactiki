@@ -1,0 +1,8 @@
+[Unit]
+Description=Пределы Галактики — проверка обновлений на GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/predelgalactiki/deploy/autoupdate.sh

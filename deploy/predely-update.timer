@@ -1,0 +1,10 @@
+[Unit]
+Description=Пределы Галактики — автообновление раз в минуту
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
