@@ -587,10 +587,11 @@ function roadPath(m,from,to,taken){ // путь со случайными вес
   const out=[];let k=K(...to);if(!prev.has(k))return out;while(k){out.push(k);k=prev.get(k)}return out.reverse();
 }
 const ROAD_GAP=1; // дороги не заходят в центральный гекс, а половинки не соединяются: сплошной дороги от базы до базы нет
-function roadLinked(ed){ // есть ли сплошная дорога от базы до базы
-  const g=new Map(); ed.forEach(e=>{const [a,b]=e.split("|");(g.get(a)||g.set(a,[]).get(a)).push(b);(g.get(b)||g.set(b,[]).get(b)).push(a)});
-  const seen=new Set([K(-4,2)]), q=[K(-4,2)];
-  while(q.length){const k=q.shift();if(k===K(4,-2))return true;for(const n of g.get(k)||[])if(!seen.has(n)){seen.add(n);q.push(n)}}
+function roadLinked(ed){ // есть ли сплошная дорога от сектора одной базы до сектора другой
+  const g=new Map(), P=k=>{const [q,r]=k.split(",").map(Number);return {q,r}}, near=(k,b)=>dist(P(k),b)<=2;
+  ed.forEach(e=>{const [a,b]=e.split("|");(g.get(a)||g.set(a,[]).get(a)).push(b);(g.get(b)||g.set(b,[]).get(b)).push(a)});
+  const q=[...g.keys()].filter(k=>near(k,{q:-5,r:2})), seen=new Set(q);
+  while(q.length){const k=q.shift();if(near(k,{q:5,r:-2}))return true;for(const n of g.get(k))if(!seen.has(n)){seen.add(n);q.push(n)}}
   return false}
 function genRoads(m){ // возвращает рёбра дорог "a|b"
   const ends=[...CELLS.values()].filter(c=>dist(c,{q:0,r:0})===ROAD_GAP&&!m[K(c.q,c.r)]&&!isDep(c.q,c.r)&&dist(c,{q:-5,r:2})<dist(c,{q:5,r:-2}));
