@@ -374,7 +374,7 @@ h1{letter-spacing:.01em}
     <div class="pick"><span class="lbl" id="lbl1">Игрок 2 · сектор справа вверху</span><div class="races" id="races1"></div></div>
     <label class="chk"><input type="checkbox" id="heavyChk" checked> Тяжёлые бойцы (5 HP, броня 1, 300 ◆)</label>
     <label class="chk"><input type="checkbox" id="terrChk" checked> Модуль местности: скалы, вода, лес, пески, руины, радиация (случайно)</label>
-    <label class="chk"><input type="checkbox" id="abilChk" checked> Способности рас: у каждого отряда своё свойство из карточек энциклопедии, плюс прорыв расы: Дорги — ракетная шахта, Ксарионы — подкоп (раз в ход нанять отряд в 2 гексах от вражеской фабрики), Велары — портал (раз в ход любой отряд переходит к своей Астре)</label>
+    <label class="chk"><input type="checkbox" id="abilChk" checked> Способности рас: у каждого отряда своё свойство из карточек энциклопедии, плюс прорыв расы: Дорги — ракетная шахта, Ксарионы — подкоп (раз в ход нанять отряд в 2 гексах от вражеской фабрики), Велары — портал (раз в ход любой отряд переходит к своей Астре, но не ближе 4 гексов к вражеской базе)</label>
     <label class="chk"><input type="checkbox" id="roadChk" checked> Случайные дороги: по дороге отряд идёт вдвое дальше</label>
     <fieldset class="balset"><legend>Баланс для плейтеста</legend>
     <label class="chk"><input type="checkbox" id="b_still"> 1. «Стоял или стрелял»: специалист за ход либо двигается, либо стреляет</label>
@@ -484,7 +484,7 @@ const TINFO={
   sand:{n:"Пески",g:"∴",d:"Зайти можно, но движение на этом гексе заканчивается. Строить нельзя.",w:"Ловушка на пути: обходите или заходите последним шагом."}
 };
 const TTILE={rock:"asteroid",ruins:"ruins",rad:"rad",water:"water",forest:"forest",sand:"desert"};
-const ROAD={n:"Дорога",d:"Шаг вдоль дороги стоит полшага: по дороге отряд проходит вдвое дальше. Строить можно.",w:"Быстрый путь к центру и к кристаллам. Удобно и вам, и противнику."};
+const ROAD={n:"Дорога",d:"Шаг вдоль дороги стоит полшага: по дороге отряд проходит вдвое дальше. Строить можно.",w:"Быстрый путь от базы к середине поля и к кристаллам. Сплошной дороги до вражеской базы нет: у центра она обрывается."};
 const DIRS=[[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]]; // углы 0°,60°,120°,180°,240°,300° (ось y вниз)
 const INCOME=150, KEY="predely-proto-hex2", HS=30, SQ3=Math.sqrt(3);
 
@@ -582,17 +582,27 @@ function roadPath(m,from,to,taken){ // путь со случайными вес
   const W=new Map(), dists=new Map([[K(...from),0]]), prev=new Map(), open=[[0,...from]];
   const w=k=>{if(!W.has(k))W.set(k,taken.has(k)?.4:1+Math.random()*.5);return W.get(k)};
   while(open.length){open.sort((a,b)=>a[0]-b[0]);const [d,x,y]=open.shift();const ck=K(x,y);if(ck===K(...to))break;if(d>dists.get(ck))continue;
-    for(const [a,b] of adj(x,y)){const k=K(a,b);if(m[k]||(isDep(a,b)&&k!==K(...to)))continue;const nd=d+w(k);
+    for(const [a,b] of adj(x,y)){const k=K(a,b);if(m[k]||(isDep(a,b)&&k!==K(...to))||dist({q:a,r:b},{q:0,r:0})<ROAD_GAP)continue;const nd=d+w(k);
       if(nd<(dists.has(k)?dists.get(k):1e9)){dists.set(k,nd);prev.set(k,ck);open.push([nd,a,b])}}}
   const out=[];let k=K(...to);if(!prev.has(k))return out;while(k){out.push(k);k=prev.get(k)}return out.reverse();
 }
+const ROAD_GAP=1; // дороги не заходят в центральный гекс, а половинки не соединяются: сплошной дороги от базы до базы нет
+function roadLinked(ed){ // есть ли сплошная дорога от базы до базы
+  const g=new Map(); ed.forEach(e=>{const [a,b]=e.split("|");(g.get(a)||g.set(a,[]).get(a)).push(b);(g.get(b)||g.set(b,[]).get(b)).push(a)});
+  const seen=new Set([K(-4,2)]), q=[K(-4,2)];
+  while(q.length){const k=q.shift();if(k===K(4,-2))return true;for(const n of g.get(k)||[])if(!seen.has(n)){seen.add(n);q.push(n)}}
+  return false}
 function genRoads(m){ // возвращает рёбра дорог "a|b"
-  const set=new Set(), ed=new Set(), e2=(a,b)=>a<b?a+"|"+b:b+"|"+a;
-  const add=p=>p.forEach((k,i)=>{set.add(k);set.add(mir(k));if(i){ed.add(e2(p[i-1],k));ed.add(e2(mir(p[i-1]),mir(k)))}});
-  add(roadPath(m,[-4,2],[0,0],set));
-  const tgt=shuffle([[-2,-2],[-2,4]])[0], tc=adj(...tgt).filter(([a,b])=>!m[K(a,b)]&&!isDep(a,b)&&!START.some(s=>s[0]===a&&s[1]===b)).sort((u,v)=>dist({q:u[0],r:u[1]},{q:-3,r:2})-dist({q:v[0],r:v[1]},{q:-3,r:2}))[0];
-  if(tc) add(roadPath(m,[-3,2],tc,set));
-  return [...ed];
+  const ends=[...CELLS.values()].filter(c=>dist(c,{q:0,r:0})===ROAD_GAP&&!m[K(c.q,c.r)]&&!isDep(c.q,c.r)&&dist(c,{q:-5,r:2})<dist(c,{q:5,r:-2}));
+  for(let tries=0;tries<30;tries++){
+    const set=new Set(), ed=new Set(), e2=(a,b)=>a<b?a+"|"+b:b+"|"+a;
+    const add=p=>p.forEach((k,i)=>{set.add(k);set.add(mir(k));if(i){ed.add(e2(p[i-1],k));ed.add(e2(mir(p[i-1]),mir(k)))}});
+    const end=shuffle(ends.slice())[0]; if(end) add(roadPath(m,[-4,2],[end.q,end.r],set)); // от базы к краю центра
+    const tgt=shuffle([[-2,-2],[-2,4]])[0], tc=adj(...tgt).filter(([a,b])=>!m[K(a,b)]&&!isDep(a,b)&&!START.some(s=>s[0]===a&&s[1]===b)).sort((u,v)=>dist({q:u[0],r:u[1]},{q:-3,r:2})-dist({q:v[0],r:v[1]},{q:-3,r:2}))[0];
+    if(tc) add(roadPath(m,[-3,2],tc,set));
+    const out=[...ed]; if(!roadLinked(out)) return out;
+  }
+  return [];
 }
 
 /* ---------- игра по сети: комнаты на сервере (server.js) ---------- */
@@ -796,7 +806,7 @@ function log(t){S.log.unshift(t);if(S.log.length>80)S.log.pop()}
 function ev(o){if(!S||!S.gid)return;const L=S.ev||(S.ev=[]);if(L.length<3000)L.push({r:S.round,p:S.cur,...o})}
 const baseHp=p=>{const b=S.ents.find(e=>e.owner===p&&e.type==="base");return b?maxHp(b)-b.dmg:0};
 function sendLog(){if(!S||!S.gid||!/^https?:$/.test(location.protocol))return;
-  const rec={gid:S.gid,lv:1,mode:NET.on?"net":S.ai!=null?"ai":"local",races:[race(0),race(1)],first:S.first,ai:S.ai,
+  const rec={gid:S.gid,lv:2,mode:NET.on?"net":S.ai!=null?"ai":"local",races:[race(0),race(1)],first:S.first,ai:S.ai,
     opts:{heavy:!!S.heavy,terrain:!!S.terrain,roads:!!(S.roads&&S.roads.length),abil:!!S.abil,bal:BALK.filter(bal)},
     round:S.round,winner:S.winner?S.winner-1:null,stats:S.stats,ev:S.ev||[]};
   const body=JSON.stringify(rec);
@@ -832,7 +842,7 @@ function startTurn(){
 }
 
 function endTurn(){
-  snap();
+  snap(); ev({a:"end",cr:S.players[S.cur].cr});
   if(S.round===5) S.stats.mines5[S.cur]=mines(S.cur);
   S.ents.filter(e=>e.owner===S.cur&&e.kind==="unit"&&terr(e.q,e.r)==="rad").forEach(e=>{
     e.dmg++; const dead=e.dmg>=maxHp(e); if(dead) S.ents=S.ents.filter(o=>o!==e);
@@ -845,8 +855,11 @@ function endTurn(){
 
 function stepCost(x,y,a,b){const t=terr(a,b);if(t==="forest")return 4;return roadE(K(x,y),K(a,b))?1:2} // в полушагах
 const portalOk=u=>abOn()&&u.kind==="unit"&&race(u.owner)==="vel"&&!S.players[u.owner].portal;
+const PORTAL_MIN=4; // портал не открывается ближе 4 гексов к вражеской базе
+const enemyBase=p=>S.ents.find(e=>e.owner!==p&&e.type==="base");
+const portalFar=(p,q,r)=>{const b=enemyBase(p);return !b||dist(b,{q,r})>=PORTAL_MIN};
 function portalCells(u){const s=new Set();if(!portalOk(u))return s; // портал: к любому своему разведчику (Астре)
-  S.ents.filter(e=>e!==u&&e.owner===u.owner&&e.type==="scout").forEach(sc=>adj(sc.q,sc.r).forEach(([a,b])=>{if(free(a,b))s.add(K(a,b))}));return s}
+  S.ents.filter(e=>e!==u&&e.owner===u.owner&&e.type==="scout").forEach(sc=>adj(sc.q,sc.r).forEach(([a,b])=>{if(free(a,b)&&portalFar(u.owner,a,b))s.add(K(a,b))}));return s}
 function reach(u){const s=walk(u);portalCells(u).forEach(k=>s.add(k));return s}
 function walk(u){
   const sp=spdOf(u)*2, ghost=has(u,"xar","fighter"), res=new Set(), seen=new Map([[K(u.q,u.r),0]]), q=[[u.q,u.r,0]];
@@ -1183,6 +1196,8 @@ function moveWhyNot(s,q,r){const k=K(q,r);
   if(s.moved) return `${ename(s)} уже двигался в этот ход.`;
   if(terr(q,r)==="rock") return "Скала непроходима: обойдите её.";
   if(terr(q,r)==="water") return "Вода непроходима: обойдите её.";
+  if(portalOk(s)&&!portalFar(s.owner,q,r)&&S.ents.some(e=>e!==s&&e.owner===s.owner&&e.type==="scout"&&dist(e,{q,r})===1))
+    return `Портал не открывается ближе ${PORTAL_MIN} гексов к вражеской базе.`;
   const sp=spdOf(s);
   return dist(s,{q,r})>sp*2||dist(s,{q,r})>sp&&!isRoad(s.q,s.r)?`Слишком далеко: ${ename(s)} проходит до ${sp} ${sp===1?"гекса":"гексов"} за ход (по дороге вдвое больше).`:"Не хватает скорости: мешают лес, пески или занятые гексы."}
 function atkWhyNot(s,t){
