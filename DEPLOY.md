@@ -44,6 +44,8 @@ bash /opt/predelgalactiki/deploy/install.sh
 
 По умолчанию страница `/logs` открыта всем, кто знает адрес. Чтобы закрыть её ключом, добавьте строку `Environment=LOGS_KEY=придумайте_слово` в `/etc/systemd/system/predely.service`, выполните `systemctl daemon-reload && systemctl restart predely` и открывайте `/logs?key=придумайте_слово`.
 
+Журнал принимает не больше 5000 партий, чтобы его нельзя было забить мусором и переполнить диск. Когда лимит достигнут, новые партии не записываются, а в `journalctl -u predely` появляется строка «Журнал полон». Лимит меняется строкой `Environment=MAX_LOGS=10000` в `/etc/systemd/system/predely.service`, а старые журналы можно скачать и удалить из `/opt/predelgalactiki/data/logs/`.
+
 Партии, открытые с GitHub Pages или из файла, не записываются: им некуда отправлять журнал.
 
 ## Обновление игры
