@@ -33,7 +33,9 @@ function summary(games, now = Date.now()) {
     byMode: {}, races: {}, matchups: {}, firstWins: 0,
     rounds: avg(done.map(g => g.round)), minutes: avg(done.map(g => g.minutes || 0)),
     hires: {}, builds: {}, recent: games.slice(-30).reverse(),
+    byLv: {}, left: { all: [], ai: [] }, // остаток ◆ на конец хода (журнал версии 2+)
   };
+  for (const g of games) s.byLv[g.lv || 1] = (s.byLv[g.lv || 1] || 0) + 1;
   for (const g of games) s.byMode[g.mode] = (s.byMode[g.mode] || 0) + 1;
   for (const r in RACE) s.races[r] = { games: 0, wins: 0, rounds: [] };
   for (const g of done) {
@@ -50,7 +52,9 @@ function summary(games, now = Date.now()) {
     const r = g.races && g.races[e.p];
     if (e.a === "hire") { const h = s.hires[r] || (s.hires[r] = {}); h[e.t] = (h[e.t] || 0) + 1; }
     if (e.a === "build") { const b = s.builds[r] || (s.builds[r] = {}); b[e.t] = (b[e.t] || 0) + 1; }
+    if (e.a === "end" && typeof e.cr === "number") { s.left.all.push(e.cr); if (g.ai === e.p) s.left.ai.push(e.cr); }
   }
+  s.left = { all: avg(s.left.all), ai: avg(s.left.ai) };
   return s;
 }
 
@@ -59,6 +63,8 @@ function text(s) {
   L.push(`Партий всего: ${s.total}. Доиграно: ${s.finished}, идут: ${s.playing}, брошено: ${s.abandoned}.`);
   L.push("Режимы: " + (Object.entries(s.byMode).map(([m, n]) => `${MODE[m] || m} ${n}`).join(", ") || "—"));
   L.push(`Доигранные: в среднем ${s.rounds} раундов, ${s.minutes} мин. Первый ходящий победил в ${pct(s.firstWins, s.finished)}.`);
+  L.push(`Остаток кристаллов на конец хода в среднем: ${s.left.all} ◆, у ИИ ${s.left.ai} ◆ (только журналы версии 2+).`);
+  L.push("Версии журнала: " + Object.entries(s.byLv).map(([v, n]) => `v${v} ${n}`).join(", "));
   L.push("", "Расы (без зеркальных партий):");
   for (const [r, x] of Object.entries(s.races)) L.push(`  ${RACE[r]}: партий ${x.games}, побед ${x.wins} (${pct(x.wins, x.games)}), раундов в среднем ${avg(x.rounds)}`);
   L.push("", "Пары рас:");
