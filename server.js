@@ -11,7 +11,10 @@ const TTL = 7 * 24 * 3600 * 1000; // комната живёт неделю бе
 const MAX_BODY = 512 * 1024;
 const LOGS = path.join(DATA, "logs"); // журнал партий: по файлу на партию
 const LOGS_KEY = process.env.LOGS_KEY || ""; // если задан, /logs открывается только с ?key=…
+const MAX_LOGS = +process.env.MAX_LOGS || 5000; // больше партий в журнале не принимается: защита диска от мусора
+const MAX_EV = 3000; // столько же событий хранит сама игра
 fs.mkdirSync(LOGS, { recursive: true });
+let logCount = fs.readdirSync(LOGS).filter(f => f.endsWith(".json")).length;
 
 const rooms = new Map(); // code → {code, ver, state, fx, seats:[token|null, token|null], names, touched}
 const waiters = new Map(); // code → Set of {res, timer}
@@ -96,12 +99,16 @@ async function saveLog(req, res) {
   if (!Array.isArray(b.races) || b.races.length !== 2 || !b.races.every(r => RACES.includes(r))) return send(res, 400, { error: "Плохой журнал" });
   const f = path.join(LOGS, b.gid + ".json"), now = Date.now();
   let old = null; try { old = JSON.parse(fs.readFileSync(f, "utf8")); } catch {}
+  if (!old && logCount >= MAX_LOGS) { console.warn(`Журнал полон: ${MAX_LOGS} партий, новая не записана`); return send(res, 507, { error: "Журнал партий переполнен" }); }
+  if (!old) logCount++;
+  const o = b.opts && typeof b.opts === "object" ? b.opts : {};
+  const opts = { heavy: !!o.heavy, terrain: !!o.terrain, roads: !!o.roads, abil: !!o.abil, bal: Array.isArray(o.bal) ? o.bal.filter(x => typeof x === "string").slice(0, 10).map(x => x.slice(0, 20)) : [] };
   const started = old ? old.started : now;
   const rec = {
     gid: b.gid, lv: +b.lv || 1, mode: MODES.includes(b.mode) ? b.mode : "local", races: b.races,
-    first: b.first === 1 ? 1 : 0, ai: b.ai === 0 || b.ai === 1 ? b.ai : null, opts: b.opts && typeof b.opts === "object" ? b.opts : {},
+    first: b.first === 1 ? 1 : 0, ai: b.ai === 0 || b.ai === 1 ? b.ai : null, opts,
     round: +b.round || 0, winner: b.winner === 0 || b.winner === 1 ? b.winner : null, stats: b.stats || {},
-    started, updated: now, minutes: Math.round((now - started) / 6000) / 10, ev: Array.isArray(b.ev) ? b.ev.slice(0, 5000) : [],
+    started, updated: now, minutes: Math.round((now - started) / 6000) / 10, ev: Array.isArray(b.ev) ? b.ev.slice(0, MAX_EV) : [],
   };
   fs.writeFile(f, JSON.stringify(rec), () => {});
   send(res, 200, { ok: true });
@@ -121,7 +128,8 @@ function showLogs(req, res, u, parts) {
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".jpg": "image/jpeg", ".png": "image/png", ".mp3": "audio/mpeg", ".json": "application/json", ".svg": "image/svg+xml", ".ico": "image/x-icon" };
 function stat(req, res, p) {
   if (p === "/") p = "/index.html";
-  const f = path.normalize(path.join(ROOT, decodeURIComponent(p)));
+  let rel; try { rel = decodeURIComponent(p); } catch { res.writeHead(400); return res.end("Bad request"); } // кривой %-код в адресе
+  const f = path.normalize(path.join(ROOT, rel));
   const top = path.relative(ROOT, f).split(path.sep)[0];
   if (!f.startsWith(ROOT + path.sep) || !["index.html", "art", "sfx"].includes(top)) { res.writeHead(404); return res.end("Not found"); }
   fs.stat(f, (e, st) => {
@@ -131,14 +139,16 @@ function stat(req, res, p) {
   });
 }
 
-http.createServer((req, res) => {
+http.createServer((req, res) => { try { route(req, res); } catch (e) { console.error(e); if (!res.headersSent) res.writeHead(400); res.end(); } })
+  .listen(PORT, () => console.log(`Пределы Галактики: http://localhost:${PORT}`));
+function route(req, res) {
   const u = new URL(req.url, "http://x"), parts = u.pathname.split("/").filter(Boolean);
   if (parts[0] === "api" && parts[1] === "room") return api(req, res, parts).catch(() => send(res, 400, { error: "Плохой запрос" }));
   if (parts[0] === "api" && parts[1] === "log" && req.method === "POST") return saveLog(req, res).catch(() => send(res, 400, { error: "Плохой запрос" }));
   if (parts[0] === "logs" && req.method === "GET") return showLogs(req, res, u, parts);
   if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
   stat(req, res, u.pathname);
-}).listen(PORT, () => console.log(`Пределы Галактики: http://localhost:${PORT}`));
+}
 
 // уборка старых комнат раз в час
 setInterval(() => {
